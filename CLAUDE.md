@@ -39,6 +39,13 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   precisión perfecta, se ajusta después con el timeline.
 - Todo tap de captura resta automáticamente `latencyOffsetMs` (calibrado por
   el usuario) para compensar el tiempo de reacción humano.
+- Mientras el modo captura está activo, la barra espaciadora cambia de rol:
+  marca el inicio de la línea actual en vez de pausar el audio (su función
+  fuera de este modo). Escape sale del modo captura y le devuelve a espacio
+  su función normal.
+- Cada tap de captura marca únicamente `startTime` de la línea; `endTime`
+  queda en `null` hasta la Fase 7, cuando se infiere del inicio de la línea
+  siguiente (con las regions del waveform, ahí sí ajustable a mano).
 - El refinamiento manual soporta nudging por teclado (flechas = ±100ms,
   Shift+flecha = paso mayor), no solo arrastre con mouse.
 - Las reglas de timing (duración mínima, solapamientos) son advertencias no
@@ -55,3 +62,5 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 2 — Carga de audio + letra, reproductor básico. Completo.
 - [x] Fase 3 — Modelo de datos + parser de letra. Completo.
 - [x] Fase 4 — Infraestructura de historial (undo/redo) + autosave. Completo.
+- [x] Fase 5 — Calibración de latencia. Completo.
+- [x] Fase 6 — Captura en vivo (tap-to-sync) a nivel línea. Completo.

@@ -21,6 +21,10 @@ export interface Project {
   lastModified: number;
 }
 
+export interface UserSettings {
+  latencyOffsetMs: number;
+}
+
 export interface HistoryEntry {
   type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject";
   before: unknown;

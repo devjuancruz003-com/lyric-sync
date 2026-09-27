@@ -9,10 +9,15 @@ export interface AppElements {
   timeDisplay: HTMLElement;
   lyricsInput: HTMLTextAreaElement;
   analyzeButton: HTMLButtonElement;
+  tapSyncButton: HTMLButtonElement;
   linesOutput: HTMLElement;
   exportButton: HTMLButtonElement;
   importInput: HTMLInputElement;
   projectStatus: HTMLElement;
+  calibrateButton: HTMLButtonElement;
+  suggestionBanner: HTMLElement;
+  suggestionCalibrateButton: HTMLButtonElement;
+  suggestionDismissButton: HTMLButtonElement;
 }
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1] as const;
@@ -22,6 +27,12 @@ export function renderLayout(root: HTMLElement): AppElements {
     <header class="app-header">
       <h1>Lyric Sync</h1>
     </header>
+
+    <div id="calibration-suggestion" class="suggestion-banner" hidden>
+      <span>¿Ya calibraste la latencia de tu dispositivo? Ayuda a que el tapeo en vivo quede más preciso.</span>
+      <button id="calibration-suggestion-calibrate" type="button">Calibrar ahora</button>
+      <button id="calibration-suggestion-dismiss" type="button" aria-label="Descartar sugerencia">✕</button>
+    </div>
 
     <main class="app-main">
       <section class="panel" aria-labelledby="audio-heading">
@@ -54,6 +65,7 @@ export function renderLayout(root: HTMLElement): AppElements {
             <button id="zoom-in-button" type="button" aria-label="Acercar" disabled>+</button>
           </div>
           <span id="time-display" class="time" aria-label="Tiempo de reproducción">0:00.0 / 0:00.0</span>
+          <button id="calibrate-button" type="button">Calibrar</button>
         </div>
       </section>
 
@@ -63,7 +75,10 @@ export function renderLayout(root: HTMLElement): AppElements {
           <span>Pegá la letra en texto plano</span>
           <textarea id="lyrics-input" rows="10" spellcheck="false"></textarea>
         </label>
-        <button id="analyze-button" type="button" disabled>Analizar letra</button>
+        <div class="lyrics-actions">
+          <button id="analyze-button" type="button" disabled>Analizar letra</button>
+          <button id="tap-sync-button" type="button" disabled>Iniciar captura</button>
+        </div>
 
         <ol id="lines-output" class="lines-output" aria-label="Letra analizada"></ol>
       </section>
@@ -99,9 +114,14 @@ export function renderLayout(root: HTMLElement): AppElements {
     timeDisplay: get("time-display"),
     lyricsInput: get("lyrics-input"),
     analyzeButton: get("analyze-button"),
+    tapSyncButton: get("tap-sync-button"),
     linesOutput: get("lines-output"),
     exportButton: get("export-button"),
     importInput: get("import-input"),
     projectStatus: get("project-status"),
+    calibrateButton: get("calibrate-button"),
+    suggestionBanner: get("calibration-suggestion"),
+    suggestionCalibrateButton: get("calibration-suggestion-calibrate"),
+    suggestionDismissButton: get("calibration-suggestion-dismiss"),
   };
 }

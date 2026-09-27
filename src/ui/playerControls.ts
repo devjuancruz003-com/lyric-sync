@@ -84,6 +84,9 @@ export function setupPlayerControls({
     if (event.key !== " " || event.repeat) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest("input, textarea, select, button, [contenteditable]")) return;
+    // El modal de calibración y el modo captura también escuchan la espaciadora; no pisarlos.
+    if (document.querySelector('[role="dialog"]')) return;
+    if (document.body.classList.contains("tap-sync-active")) return;
     event.preventDefault();
     togglePlay();
   });

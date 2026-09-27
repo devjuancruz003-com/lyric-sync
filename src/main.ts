@@ -4,19 +4,26 @@ import { History } from "./core/history";
 import { createProject, type HistoryEntry, type Project } from "./core/project";
 import { parseLyrics } from "./core/parser";
 import {
+  dismissCalibrationSuggestion,
   exportProject,
   hasUnsavedChanges,
+  hasUserSettings,
   importProject,
+  isCalibrationSuggestionDismissed,
   loadProject,
+  loadUserSettings,
   markSaved,
   markUnsaved,
   saveProject,
+  saveUserSettings,
 } from "./core/storage";
 import { renderLayout } from "./ui/layout";
 import { setupAudioLoader } from "./ui/audioLoader";
 import { setupPlayerControls } from "./ui/playerControls";
 import { setupLyricsInput } from "./ui/lyricsInput";
 import { renderLines } from "./ui/linesPreview";
+import { calibrationButtonLabel, openCalibrationModal } from "./ui/calibration";
+import { setupTapSync } from "./ui/tapSync";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -40,6 +47,27 @@ const controls = setupPlayerControls({
   waveform: els.waveform,
 });
 
+const tapSyncControls = setupTapSync({
+  startButton: els.tapSyncButton,
+  player,
+  linesOutput: els.linesOutput,
+  getLines: () => project?.lines ?? [],
+  getLatencyOffsetMs: () => userSettings.latencyOffsetMs,
+  onTap: (lineId, startTime) => {
+    history.push({
+      type: "setTimestamp",
+      before: { lineId, startTime: null },
+      after: { lineId, startTime },
+      timestamp: Date.now(),
+    });
+    setLineStartTime(lineId, startTime);
+  },
+});
+
+function updateTapSyncButton(): void {
+  tapSyncControls.setEnabled(!!project && project.lines.length > 0 && !!loadedAudio);
+}
+
 setupAudioLoader({
   input: els.audioInput,
   status: els.audioStatus,
@@ -48,6 +76,7 @@ setupAudioLoader({
   onLoaded: (file, duration) => {
     controls.setEnabled(true);
     loadedAudio = { fileName: file.name, duration };
+    updateTapSyncButton();
   },
 });
 
@@ -60,11 +89,29 @@ function updateProjectButton(): void {
   els.exportButton.disabled = !project;
 }
 
-/** Reemplaza el estado actual y refleja el resultado en la UI (lista de líneas + textarea). */
+/** Reemplaza el Project entero y refleja el resultado en la UI. Cualquier captura en curso
+ * queda invalidada (los índices ya no corresponden a las mismas líneas). */
 function applyProject(next: Project | null): void {
+  tapSyncControls.exitCapture();
   project = next;
   renderLines(els.linesOutput, project?.lines ?? []);
   updateProjectButton();
+  updateTapSyncButton();
+}
+
+/** Actualiza el startTime de una sola línea sin tocar el resto (usado por la captura en
+ * vivo y por undo/redo de "setTimestamp") — no interrumpe una captura en curso. */
+function setLineStartTime(lineId: string, startTime: number | null): void {
+  if (!project) return;
+  project = {
+    ...project,
+    lines: project.lines.map((line) => (line.id === lineId ? { ...line, startTime } : line)),
+  };
+  renderLines(els.linesOutput, project.lines);
+  tapSyncControls.refreshHighlight();
+  updateProjectButton();
+  saveProject(project);
+  markUnsaved();
 }
 
 const lyricsControls = setupLyricsInput({
@@ -88,6 +135,12 @@ const lyricsControls = setupLyricsInput({
 // --- Undo/redo ---
 
 function applyHistoryEntry(entry: HistoryEntry, side: "before" | "after"): void {
+  if (entry.type === "setTimestamp") {
+    const { lineId, startTime } = entry[side] as { lineId: string; startTime: number | null };
+    setLineStartTime(lineId, startTime);
+    return;
+  }
+
   const state = entry[side] as Project | null;
   applyProject(state);
   if (state) saveProject(state);
@@ -162,4 +215,42 @@ window.addEventListener("beforeunload", (event) => {
   if (!hasUnsavedChanges()) return;
   event.preventDefault();
   event.returnValue = "";
+});
+
+// --- Calibración de latencia ---
+
+let userSettings = loadUserSettings();
+
+function updateCalibrateButton(): void {
+  els.calibrateButton.textContent = calibrationButtonLabel(hasUserSettings() ? userSettings.latencyOffsetMs : null);
+}
+updateCalibrateButton();
+
+function openCalibration(): void {
+  openCalibrationModal({
+    onSave: (latencyOffsetMs) => {
+      userSettings = { latencyOffsetMs };
+      saveUserSettings(userSettings);
+      updateCalibrateButton();
+    },
+  });
+}
+
+els.calibrateButton.addEventListener("click", openCalibration);
+
+// Sugerencia no bloqueante la primera vez que nunca se calibró. Si se descarta, no insiste
+// en cada carga (el botón "Calibrar" de arriba sigue disponible siempre).
+if (!hasUserSettings() && !isCalibrationSuggestionDismissed()) {
+  els.suggestionBanner.hidden = false;
+}
+
+els.suggestionCalibrateButton.addEventListener("click", () => {
+  dismissCalibrationSuggestion();
+  els.suggestionBanner.hidden = true;
+  openCalibration();
+});
+
+els.suggestionDismissButton.addEventListener("click", () => {
+  dismissCalibrationSuggestion();
+  els.suggestionBanner.hidden = true;
 });

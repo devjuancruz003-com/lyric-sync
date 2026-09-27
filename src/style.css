@@ -7,6 +7,7 @@
   --text: #1c1e26;
   --muted: #5f6475;
   --accent: #5b6cff;
+  --highlight: #fff3b0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,6 +17,7 @@
     --border: #2f3240;
     --text: #e7e8ee;
     --muted: #9a9fb2;
+    --highlight: #4a4020;
   }
 }
 
@@ -123,8 +125,14 @@ textarea {
   resize: vertical;
 }
 
-#analyze-button {
+.lyrics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 12px;
+}
+
+.lyrics-actions button {
   padding: 6px 14px;
   font: inherit;
 }
@@ -140,10 +148,23 @@ textarea {
 
 .lines-output li {
   margin-bottom: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
 }
 
 .lines-output .word {
   display: inline-block;
+}
+
+.lines-output .line-timestamp {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lines-output li.target-line {
+  background: var(--highlight);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .project-actions {
@@ -154,6 +175,95 @@ textarea {
 }
 
 .project-actions button {
+  padding: 6px 14px;
+  font: inherit;
+}
+
+.suggestion-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 1000px;
+  margin: 16px auto 0;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.suggestion-banner[hidden] {
+  display: none;
+}
+
+.suggestion-banner span {
+  flex: 1;
+  min-width: 200px;
+}
+
+.suggestion-banner button {
+  padding: 6px 12px;
+  font: inherit;
+}
+
+.calibration-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.calibration-panel {
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.calibration-panel:focus-visible {
+  outline: none;
+}
+
+.calibration-panel h2 {
+  margin: 0 0 12px;
+}
+
+.calibration-status {
+  min-height: 1.5em;
+  font-weight: 600;
+}
+
+.calibration-pulse {
+  width: 80px;
+  height: 80px;
+  margin: 16px auto;
+  border-radius: 50%;
+  background: var(--border);
+  transition:
+    background-color 80ms ease,
+    transform 80ms ease;
+}
+
+.calibration-pulse.is-active {
+  background: var(--accent);
+  transform: scale(1.15);
+}
+
+.calibration-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.calibration-actions button {
   padding: 6px 14px;
   font: inherit;
 }
