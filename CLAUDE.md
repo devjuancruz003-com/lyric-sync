@@ -52,6 +52,6 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 ## Estado actual
 
 - [x] Fase 1 — Setup del proyecto (Vite + TS + wavesurfer.js) y deploy a GitHub Pages. Completo.
-- [ ] Fase 2 — Carga de audio + letra, reproductor básico. **En curso.**
+- [x] Fase 2 — Carga de audio + letra, reproductor básico. Completo.
 - [ ] Fase 3 — Modelo de datos + parser de letra
 - [ ] Fase 4 — Infraestructura de historial (undo/redo)
