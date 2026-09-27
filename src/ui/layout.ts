@@ -8,6 +8,8 @@ export interface AppElements {
   zoomOutButton: HTMLButtonElement;
   timeDisplay: HTMLElement;
   lyricsInput: HTMLTextAreaElement;
+  analyzeButton: HTMLButtonElement;
+  linesOutput: HTMLElement;
 }
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1] as const;
@@ -58,6 +60,9 @@ export function renderLayout(root: HTMLElement): AppElements {
           <span>Pegá la letra en texto plano</span>
           <textarea id="lyrics-input" rows="10" spellcheck="false"></textarea>
         </label>
+        <button id="analyze-button" type="button" disabled>Analizar letra</button>
+
+        <ol id="lines-output" class="lines-output" aria-label="Letra analizada"></ol>
       </section>
     </main>
   `;
@@ -78,5 +83,7 @@ export function renderLayout(root: HTMLElement): AppElements {
     zoomOutButton: get("zoom-out-button"),
     timeDisplay: get("time-display"),
     lyricsInput: get("lyrics-input"),
+    analyzeButton: get("analyze-button"),
+    linesOutput: get("lines-output"),
   };
 }

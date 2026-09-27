@@ -122,3 +122,26 @@ textarea {
   font: inherit;
   resize: vertical;
 }
+
+#analyze-button {
+  margin-top: 12px;
+  padding: 6px 14px;
+  font: inherit;
+}
+
+.lines-output {
+  margin: 16px 0 0;
+  padding-left: 28px;
+}
+
+.lines-output:empty {
+  display: none;
+}
+
+.lines-output li {
+  margin-bottom: 6px;
+}
+
+.lines-output .word {
+  display: inline-block;
+}

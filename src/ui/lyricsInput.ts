@@ -1,9 +1,17 @@
 interface LyricsInputOptions {
   input: HTMLTextAreaElement;
-  onChange?: (text: string) => void;
+  analyzeButton: HTMLButtonElement;
+  onAnalyze: (text: string) => void;
 }
 
-/** Textarea de letra en texto plano. El parseo en líneas/palabras llega en la Fase 3. */
-export function setupLyricsInput({ input, onChange }: LyricsInputOptions): void {
-  input.addEventListener("input", () => onChange?.(input.value));
+/** Textarea de letra en texto plano + botón para analizarla (Fase 3). */
+export function setupLyricsInput({ input, analyzeButton, onAnalyze }: LyricsInputOptions): void {
+  const updateButtonState = () => {
+    analyzeButton.disabled = input.value.trim() === "";
+  };
+
+  input.addEventListener("input", updateButtonState);
+  analyzeButton.addEventListener("click", () => onAnalyze(input.value));
+
+  updateButtonState();
 }
