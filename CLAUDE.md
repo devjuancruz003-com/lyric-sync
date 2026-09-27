@@ -30,7 +30,7 @@ interface Project { audioFileName: string; duration: number; syncMode: "line" | 
 interface Line { id: string; text: string; startTime: number | null; endTime: number | null; words: Word[]; }
 interface Word { id: string; text: string; startTime: number | null; endTime: number | null; }
 interface UserSettings { latencyOffsetMs: number; }
-interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset"; before: unknown; after: unknown; timestamp: number; }
+interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject"; before: unknown; after: unknown; timestamp: number; }
 ```
 
 ## Decisiones de UX (no cambiar sin avisar)
@@ -54,4 +54,4 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 1 — Setup del proyecto (Vite + TS + wavesurfer.js) y deploy a GitHub Pages. Completo.
 - [x] Fase 2 — Carga de audio + letra, reproductor básico. Completo.
 - [x] Fase 3 — Modelo de datos + parser de letra. Completo.
-- [ ] Fase 4 — Infraestructura de historial (undo/redo)
+- [x] Fase 4 — Infraestructura de historial (undo/redo) + autosave. Completo.

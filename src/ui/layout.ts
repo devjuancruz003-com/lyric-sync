@@ -10,6 +10,9 @@ export interface AppElements {
   lyricsInput: HTMLTextAreaElement;
   analyzeButton: HTMLButtonElement;
   linesOutput: HTMLElement;
+  exportButton: HTMLButtonElement;
+  importInput: HTMLInputElement;
+  projectStatus: HTMLElement;
 }
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1] as const;
@@ -64,6 +67,18 @@ export function renderLayout(root: HTMLElement): AppElements {
 
         <ol id="lines-output" class="lines-output" aria-label="Letra analizada"></ol>
       </section>
+
+      <section class="panel" aria-labelledby="project-heading">
+        <h2 id="project-heading">Proyecto</h2>
+        <div class="project-actions">
+          <button id="export-button" type="button" disabled>Exportar proyecto</button>
+          <label class="file-field">
+            <span>Importar proyecto (.json)</span>
+            <input id="import-input" type="file" accept=".json,application/json" />
+          </label>
+        </div>
+        <p id="project-status" class="status" role="status" aria-live="polite"></p>
+      </section>
     </main>
   `;
 
@@ -85,5 +100,8 @@ export function renderLayout(root: HTMLElement): AppElements {
     lyricsInput: get("lyrics-input"),
     analyzeButton: get("analyze-button"),
     linesOutput: get("lines-output"),
+    exportButton: get("export-button"),
+    importInput: get("import-input"),
+    projectStatus: get("project-status"),
   };
 }

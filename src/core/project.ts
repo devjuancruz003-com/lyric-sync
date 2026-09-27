@@ -21,6 +21,13 @@ export interface Project {
   lastModified: number;
 }
 
+export interface HistoryEntry {
+  type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject";
+  before: unknown;
+  after: unknown;
+  timestamp: number;
+}
+
 export function generateId(): string {
   return crypto.randomUUID();
 }
