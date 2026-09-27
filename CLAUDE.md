@@ -56,7 +56,14 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   en la lista), Shift+←/→ en pasos de 500ms, Tab alterna qué borde está
   activo, Escape deselecciona y devuelve las flechas al seek normal.
 - Las reglas de timing (duración mínima, solapamientos) son advertencias no
-  bloqueantes, nunca impiden guardar o exportar.
+  bloqueantes, nunca impiden guardar o exportar. Son derivadas: no se guardan
+  en el Project ni en localStorage, se recalculan en cada render a partir de
+  los `startTime`/`endTime` actuales (si se guardaran, quedarían
+  desactualizadas apenas alguien ajuste un timing sin volver a validar).
+- Duración mínima de línea: 300ms (no los ~833ms de subtítulos hablados tipo
+  Netflix — acá son versos cantados, donde una palabra suelta en un tramo
+  rápido puede durar 150-200ms legítimamente). El piso de 300ms es para
+  atrapar mistaps evidentes de captura, no para exigir ritmo de lectura.
 - El preview usa el mismo motor de renderizado (`src/render/highlighter.ts`)
   que los exportadores — nunca una implementación aparte.
 - Toda la app debe ser operable por teclado (sin depender del mouse).
@@ -72,3 +79,4 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 5 — Calibración de latencia. Completo.
 - [x] Fase 6 — Captura en vivo (tap-to-sync) a nivel línea. Completo.
 - [x] Fase 7 — Refinamiento manual (regions en waveform + nudging por teclado). Completo.
+- [x] Fase 8 — Validación de timing (avisos no bloqueantes). Completo.

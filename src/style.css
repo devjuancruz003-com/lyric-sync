@@ -8,6 +8,7 @@
   --muted: #5f6475;
   --accent: #5b6cff;
   --highlight: #fff3b0;
+  --warning: #d1495b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -18,6 +19,7 @@
     --text: #e7e8ee;
     --muted: #9a9fb2;
     --highlight: #4a4020;
+    --warning: #ff8095;
   }
 }
 
@@ -26,6 +28,21 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
+}
+
+/* Visualmente oculto pero legible por lectores de pantalla — reutilizable en toda la app,
+ * para texto de accesibilidad que no debería aparecer en pantalla (a diferencia de un
+ * `title` de HTML, que no siempre llega a los lectores de pantalla). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .app-header {
@@ -173,6 +190,17 @@ textarea {
 .lines-output li.selected-line {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* Aviso de timing (Fase 8): borde izquierdo en vez de outline, para poder coexistir sin
+ * pisarse con el resaltado de captura o de selección de arriba (ambos usan outline). */
+.lines-output li.line-warning {
+  border-left: 3px solid var(--warning);
+  padding-left: 5px;
+}
+
+.line-warning-icon {
+  color: var(--warning);
 }
 
 .project-actions {
