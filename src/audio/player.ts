@@ -1,10 +1,24 @@
 import WaveSurfer from "wavesurfer.js";
+import RegionsPlugin, { type Region } from "wavesurfer.js/plugins/regions";
+import type { Line } from "../core/project";
+import type { LineEdge } from "../sync/timeline";
 
 export type Unsubscribe = () => void;
 
 /** Tope de zoom: 1 px = 1 ms, suficiente para ajustar palabra por palabra. */
 export const MAX_PX_PER_SEC = 1000;
 const ZOOM_STEP = 2;
+/** Debe coincidir con MIN_LINE_LENGTH_SEC en src/sync/timeline.ts. */
+const MIN_REGION_LENGTH_SEC = 0.05;
+// El color por defecto de las regions es casi imperceptible (negro al 10% de opacidad);
+// uno propio, bien visible, para que se puedan ver y agarrar con el mouse.
+const REGION_COLOR = "rgba(255, 159, 28, 0.3)";
+
+export interface RegionUpdate {
+  lineId: string;
+  start: number;
+  end: number;
+}
 
 /**
  * Wrapper sobre wavesurfer.js. El resto de la app habla con esta clase y no
@@ -13,6 +27,7 @@ const ZOOM_STEP = 2;
  */
 export class AudioPlayer {
   private readonly ws: WaveSurfer;
+  private readonly regions: ReturnType<typeof RegionsPlugin.create>;
   private readonly container: HTMLElement;
   private playbackRate = 1;
   /** 0 = ajustado al ancho del contenedor (toda la onda visible, sin scroll). */
@@ -30,6 +45,7 @@ export class AudioPlayer {
       normalize: true,
       dragToSeek: true,
     });
+    this.regions = this.ws.registerPlugin(RegionsPlugin.create());
   }
 
   /** Carga un archivo de audio local. Resuelve con la duración en segundos. */
@@ -140,6 +156,82 @@ export class AudioPlayer {
 
   onError(listener: (error: Error) => void): Unsubscribe {
     return this.ws.on("error", listener);
+  }
+
+  private findRegion(lineId: string): Region | undefined {
+    return this.regions.getRegions().find((region) => region.id === lineId);
+  }
+
+  /** Reemplaza todas las regions por una por cada línea con startTime Y endTime definidos. */
+  renderLineRegions(lines: Line[]): void {
+    this.regions.clearRegions();
+    for (const line of lines) {
+      if (line.startTime === null || line.endTime === null) continue;
+      this.regions.addRegion({
+        id: line.id,
+        start: line.startTime,
+        end: line.endTime,
+        color: REGION_COLOR,
+        drag: true,
+        resize: true,
+        resizeStart: true,
+        resizeEnd: true,
+        minLength: MIN_REGION_LENGTH_SEC,
+      });
+    }
+  }
+
+  /** Mueve la region de `lineId` a la posición dada (ej. para reflejar un nudge por teclado o un undo/redo). */
+  updateRegion(lineId: string, start: number, end: number): void {
+    this.findRegion(lineId)?.setOptions({ start, end });
+  }
+
+  /**
+   * Resalta la region de `lineId` como seleccionada, con un indicador en su
+   * borde activo ("start" o "end"). `lineId: null` quita cualquier resaltado.
+   * Se aplica como estilo inline (no clase CSS) porque el plugin ya fija
+   * estilos inline en las regions y sus handles de resize.
+   */
+  highlightRegion(lineId: string | null, activeEdge: LineEdge | null): void {
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#5b6cff";
+
+    for (const region of this.regions.getRegions()) {
+      if (!region.element) continue;
+      region.element.style.outline = "";
+      const left = region.element.querySelector<HTMLElement>('[part~="region-handle-left"]');
+      const right = region.element.querySelector<HTMLElement>('[part~="region-handle-right"]');
+      if (left) left.style.borderLeftColor = "";
+      if (right) right.style.borderRightColor = "";
+    }
+
+    if (lineId === null) return;
+    const region = this.findRegion(lineId);
+    if (!region?.element) return;
+
+    region.element.style.outline = `2px solid ${accent}`;
+    const selector = activeEdge === "end" ? '[part~="region-handle-right"]' : '[part~="region-handle-left"]';
+    const handle = region.element.querySelector<HTMLElement>(selector);
+    if (!handle) return;
+    if (activeEdge === "end") handle.style.borderRightColor = accent;
+    else handle.style.borderLeftColor = accent;
+  }
+
+  /** Se dispara cuando el usuario hace click en una region (para seleccionarla). */
+  onRegionClick(listener: (lineId: string) => void): Unsubscribe {
+    return this.regions.on("region-clicked", (region) => listener(region.id));
+  }
+
+  /**
+   * Se dispara cuando el usuario termina de arrastrar o redimensionar una
+   * region (no en cada frame del arrastre). Ojo: pese al nombre que uno
+   * esperaría, la librería llama a este evento 'region-updated' (con "d");
+   * 'region-update' (sin "d") es el que dispara en cada frame del arrastre y
+   * NO es el que queremos acá.
+   */
+  onRegionUpdateEnd(listener: (update: RegionUpdate) => void): Unsubscribe {
+    return this.regions.on("region-updated", (region) => {
+      listener({ lineId: region.id, start: region.start, end: region.end });
+    });
   }
 
   destroy(): void {

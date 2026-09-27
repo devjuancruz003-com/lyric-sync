@@ -24,6 +24,7 @@ import { setupLyricsInput } from "./ui/lyricsInput";
 import { renderLines } from "./ui/linesPreview";
 import { calibrationButtonLabel, openCalibrationModal } from "./ui/calibration";
 import { setupTapSync } from "./ui/tapSync";
+import { setupTimeline } from "./ui/timeline";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -54,18 +55,27 @@ const tapSyncControls = setupTapSync({
   getLines: () => project?.lines ?? [],
   getLatencyOffsetMs: () => userSettings.latencyOffsetMs,
   onTap: (lineId, startTime) => {
-    history.push({
-      type: "setTimestamp",
-      before: { lineId, startTime: null },
-      after: { lineId, startTime },
-      timestamp: Date.now(),
-    });
-    setLineStartTime(lineId, startTime);
+    const currentEndTime = project?.lines.find((line) => line.id === lineId)?.endTime ?? null;
+    commitLineTiming(lineId, startTime, currentEndTime);
   },
+});
+
+const timelineControls = setupTimeline({
+  refineButton: els.refineButton,
+  refineStatus: els.refineStatus,
+  player,
+  linesOutput: els.linesOutput,
+  getLines: () => project?.lines ?? [],
+  getAudioDuration: () => player.getDuration() || project?.duration || 0,
+  onLineTimingChange: commitLineTiming,
 });
 
 function updateTapSyncButton(): void {
   tapSyncControls.setEnabled(!!project && project.lines.length > 0 && !!loadedAudio);
+}
+
+function updateTimelineButton(): void {
+  timelineControls.setEnabled(!!project && project.lines.some((line) => line.startTime !== null));
 }
 
 setupAudioLoader({
@@ -77,6 +87,10 @@ setupAudioLoader({
     controls.setEnabled(true);
     loadedAudio = { fileName: file.name, duration };
     updateTapSyncButton();
+    // Las regions creadas antes de cargar audio (ej. al restaurar un proyecto) quedan
+    // registradas pero wavesurfer.js no siempre las inserta en el DOM cuando el audio
+    // termina de cargar después — re-renderizarlas acá, ya con audio real, es confiable.
+    player.renderLineRegions(project?.lines ?? []);
   },
 });
 
@@ -89,29 +103,51 @@ function updateProjectButton(): void {
   els.exportButton.disabled = !project;
 }
 
-/** Reemplaza el Project entero y refleja el resultado en la UI. Cualquier captura en curso
- * queda invalidada (los índices ya no corresponden a las mismas líneas). */
+/** Reemplaza el Project entero y refleja el resultado en la UI (líneas + regions). Cualquier
+ * captura o selección en curso queda invalidada (ya no corresponden a las mismas líneas). */
 function applyProject(next: Project | null): void {
   tapSyncControls.exitCapture();
+  timelineControls.exitSelection();
   project = next;
   renderLines(els.linesOutput, project?.lines ?? []);
+  player.renderLineRegions(project?.lines ?? []);
   updateProjectButton();
   updateTapSyncButton();
+  updateTimelineButton();
 }
 
-/** Actualiza el startTime de una sola línea sin tocar el resto (usado por la captura en
- * vivo y por undo/redo de "setTimestamp") — no interrumpe una captura en curso. */
-function setLineStartTime(lineId: string, startTime: number | null): void {
+/** Actualiza start/endTime de una sola línea sin tocar el resto (usado por la captura en
+ * vivo, la derivación automática de endTime, el nudging y el arrastre de regions, y por
+ * undo/redo de "setTimestamp") — no interrumpe una captura ni una selección en curso. */
+function setLineTimestamps(lineId: string, startTime: number | null, endTime: number | null): void {
   if (!project) return;
   project = {
     ...project,
-    lines: project.lines.map((line) => (line.id === lineId ? { ...line, startTime } : line)),
+    lines: project.lines.map((line) => (line.id === lineId ? { ...line, startTime, endTime } : line)),
   };
   renderLines(els.linesOutput, project.lines);
   tapSyncControls.refreshHighlight();
+  timelineControls.refreshSelectionHighlight();
+  if (startTime !== null && endTime !== null) player.updateRegion(lineId, startTime, endTime);
   updateProjectButton();
+  updateTimelineButton();
   saveProject(project);
   markUnsaved();
+}
+
+/** Empuja un HistoryEntry "setTimestamp" para una línea y aplica el cambio — usado por el tap
+ * en vivo, la derivación automática de endTime, el nudging por teclado y el arrastre de regions. */
+function commitLineTiming(lineId: string, startTime: number | null, endTime: number | null): void {
+  if (!project) return;
+  const current = project.lines.find((line) => line.id === lineId);
+  if (!current) return;
+  history.push({
+    type: "setTimestamp",
+    before: { lineId, startTime: current.startTime, endTime: current.endTime },
+    after: { lineId, startTime, endTime },
+    timestamp: Date.now(),
+  });
+  setLineTimestamps(lineId, startTime, endTime);
 }
 
 const lyricsControls = setupLyricsInput({
@@ -136,8 +172,12 @@ const lyricsControls = setupLyricsInput({
 
 function applyHistoryEntry(entry: HistoryEntry, side: "before" | "after"): void {
   if (entry.type === "setTimestamp") {
-    const { lineId, startTime } = entry[side] as { lineId: string; startTime: number | null };
-    setLineStartTime(lineId, startTime);
+    const { lineId, startTime, endTime } = entry[side] as {
+      lineId: string;
+      startTime: number | null;
+      endTime: number | null;
+    };
+    setLineTimestamps(lineId, startTime, endTime);
     return;
   }
 

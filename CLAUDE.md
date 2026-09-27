@@ -44,10 +44,17 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   fuera de este modo). Escape sale del modo captura y le devuelve a espacio
   su función normal.
 - Cada tap de captura marca únicamente `startTime` de la línea; `endTime`
-  queda en `null` hasta la Fase 7, cuando se infiere del inicio de la línea
-  siguiente (con las regions del waveform, ahí sí ajustable a mano).
-- El refinamiento manual soporta nudging por teclado (flechas = ±100ms,
-  Shift+flecha = paso mayor), no solo arrastre con mouse.
+  queda en `null` hasta la Fase 7.
+- Al entrar por primera vez al modo refinamiento, cada línea capturada recibe
+  un `endTime` automático: el `startTime` de la línea siguiente, o la
+  duración total del audio si es la última. Es un dato real del Project (no
+  solo visual) — empuja un `HistoryEntry` por línea, así se puede deshacer si
+  el resultado automático no sirve.
+- Nudging por teclado en el refinamiento, sin línea seleccionada las flechas
+  siguen siendo el seek de ±5s (Fase 2): ←/→ ajustan en pasos de 100ms el
+  borde activo (inicio o fin) de la línea seleccionada (click en su region o
+  en la lista), Shift+←/→ en pasos de 500ms, Tab alterna qué borde está
+  activo, Escape deselecciona y devuelve las flechas al seek normal.
 - Las reglas de timing (duración mínima, solapamientos) son advertencias no
   bloqueantes, nunca impiden guardar o exportar.
 - El preview usa el mismo motor de renderizado (`src/render/highlighter.ts`)
@@ -64,3 +71,4 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 4 — Infraestructura de historial (undo/redo) + autosave. Completo.
 - [x] Fase 5 — Calibración de latencia. Completo.
 - [x] Fase 6 — Captura en vivo (tap-to-sync) a nivel línea. Completo.
+- [x] Fase 7 — Refinamiento manual (regions en waveform + nudging por teclado). Completo.

@@ -4,8 +4,9 @@ import { formatTime } from "./format";
 /**
  * Renderiza las líneas analizadas como <li>, cada palabra en su propio <span>.
  * Nodos separados por palabra porque el motor de resaltado (Fase 5+) necesita
- * poder marcar cada uno individualmente. Las líneas ya sincronizadas muestran
- * su startTime al lado del texto (ej. "[0:12.4] Primera línea").
+ * poder marcar cada uno individualmente. Las líneas con startTime muestran su
+ * timestamp junto al texto; con endTime también, muestran el rango completo
+ * (ej. "[0:12.4–0:15.1] Primera línea").
  */
 export function renderLines(container: HTMLElement, lines: Line[]): void {
   container.innerHTML = "";
@@ -17,7 +18,10 @@ export function renderLines(container: HTMLElement, lines: Line[]): void {
     if (line.startTime !== null) {
       const timestamp = document.createElement("span");
       timestamp.className = "line-timestamp";
-      timestamp.textContent = `[${formatTime(line.startTime)}]`;
+      timestamp.textContent =
+        line.endTime !== null
+          ? `[${formatTime(line.startTime)}–${formatTime(line.endTime)}]`
+          : `[${formatTime(line.startTime)}]`;
       li.appendChild(timestamp);
       li.appendChild(document.createTextNode(" "));
     }
@@ -43,5 +47,17 @@ export function renderLines(container: HTMLElement, lines: Line[]): void {
 export function setTargetLine(container: HTMLElement, lineId: string | null): void {
   for (const li of container.querySelectorAll<HTMLLIElement>("li")) {
     li.classList.toggle("target-line", li.dataset.lineId === lineId);
+  }
+}
+
+/**
+ * Marca la <li> de `lineId` como seleccionada para refinamiento (Fase 7);
+ * `null` deselecciona todas. Es un estado visual distinto del resaltado de
+ * línea "objetivo" de captura — no deberían confundirse, aunque en teoría
+ * podrían coexistir en la misma línea.
+ */
+export function setSelectedLine(container: HTMLElement, lineId: string | null): void {
+  for (const li of container.querySelectorAll<HTMLLIElement>("li")) {
+    li.classList.toggle("selected-line", li.dataset.lineId === lineId);
   }
 }

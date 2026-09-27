@@ -73,6 +73,9 @@ export function setupPlayerControls({
   waveform.addEventListener("keydown", (event) => {
     if (!enabled) return;
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      // Con una línea seleccionada en el timeline de refinamiento, las flechas ajustan su
+      // borde activo en vez de hacer seek (Fase 7).
+      if (document.body.classList.contains("timeline-selection-active")) return;
       event.preventDefault();
       const delta = event.key === "ArrowLeft" ? -KEYBOARD_SEEK_STEP : KEYBOARD_SEEK_STEP;
       player.seek(player.getCurrentTime() + delta);

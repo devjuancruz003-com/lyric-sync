@@ -150,6 +150,7 @@ textarea {
   margin-bottom: 6px;
   padding: 2px 4px;
   border-radius: 4px;
+  cursor: pointer;
 }
 
 .lines-output .word {
@@ -163,6 +164,13 @@ textarea {
 
 .lines-output li.target-line {
   background: var(--highlight);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Selección de refinamiento (Fase 7): distinta del resaltado de línea "objetivo" de
+ * captura de arriba — solo el borde, sin relleno, para no confundirlas. */
+.lines-output li.selected-line {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

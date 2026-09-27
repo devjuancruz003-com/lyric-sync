@@ -10,6 +10,8 @@ export interface AppElements {
   lyricsInput: HTMLTextAreaElement;
   analyzeButton: HTMLButtonElement;
   tapSyncButton: HTMLButtonElement;
+  refineButton: HTMLButtonElement;
+  refineStatus: HTMLElement;
   linesOutput: HTMLElement;
   exportButton: HTMLButtonElement;
   importInput: HTMLInputElement;
@@ -78,7 +80,9 @@ export function renderLayout(root: HTMLElement): AppElements {
         <div class="lyrics-actions">
           <button id="analyze-button" type="button" disabled>Analizar letra</button>
           <button id="tap-sync-button" type="button" disabled>Iniciar captura</button>
+          <button id="refine-button" type="button" disabled>Refinar timing</button>
         </div>
+        <p id="refine-status" class="status" role="status" aria-live="polite"></p>
 
         <ol id="lines-output" class="lines-output" aria-label="Letra analizada"></ol>
       </section>
@@ -115,6 +119,8 @@ export function renderLayout(root: HTMLElement): AppElements {
     lyricsInput: get("lyrics-input"),
     analyzeButton: get("analyze-button"),
     tapSyncButton: get("tap-sync-button"),
+    refineButton: get("refine-button"),
+    refineStatus: get("refine-status"),
     linesOutput: get("lines-output"),
     exportButton: get("export-button"),
     importInput: get("import-input"),
