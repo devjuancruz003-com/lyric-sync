@@ -30,7 +30,7 @@ interface Project { audioFileName: string; duration: number; syncMode: "line" | 
 interface Line { id: string; text: string; startTime: number | null; endTime: number | null; words: Word[]; }
 interface Word { id: string; text: string; startTime: number | null; endTime: number | null; }
 interface UserSettings { latencyOffsetMs: number; }
-interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject" | "setSyncMode" | "setWordTimestamp"; before: unknown; after: unknown; timestamp: number; }
+interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject" | "setSyncMode" | "setWordTimestamp" | "clearWords"; before: unknown; after: unknown; timestamp: number; }
 ```
 
 ## Decisiones de UX (no cambiar sin avisar)
@@ -109,6 +109,38 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   línea angosta es demasiada UI para el plan actual. El undo cubre el caso de
   "salió mal": se rehace la captura de esa línea entera. Ajuste fino por
   palabra, si hace falta, sería una fase aparte.
+- Re-grabar palabras (Fase 10c, panel "Línea seleccionada"): siempre limpia
+  la LÍNEA ENTERA, nunca desde una palabra puntual — mismo criterio que el
+  punto anterior (el undo ya cubre "salió mal"; una re-grabación parcial es
+  la fase aparte que no se implementa todavía). Limpiar es un solo paso: al
+  apretar "(Re-)grabar palabras" se empuja UN `HistoryEntry` de tipo
+  "clearWords" (payload con el `before` real de cada palabra y un `after`
+  con todas en `null`) y recién después arranca la captura — así un solo
+  Ctrl+Z devuelve las palabras a como estaban, sin importar cuántos taps se
+  hicieron después. Reutiliza la selección de línea que ya existe
+  (`src/ui/timeline.ts`, click en la lista o en la region), sin otro
+  mecanismo de selección — esa selección ya funciona fuera de "Refinar
+  timing" (no depende de estar en modo refinamiento). El panel
+  "Línea seleccionada" vive en la pestaña Sincronizar, debajo del Preview
+  (misma columna; también debajo en pantallas angostas), y solo se muestra
+  con `syncMode === "word"` y una línea seleccionada — oculto en cualquier
+  otro caso, sin recuadro vacío. El botón se deshabilita sin rango propio
+  (`startTime`/`endTime` de la línea) o con una captura activa (de líneas o
+  de palabras), con un texto corto debajo explicando por qué.
+- La captura de palabras arranca con un pre-roll de `WORD_CAPTURE_PREROLL_SEC`
+  (2s, única constante en `src/sync/wordSync.ts`) antes del `startTime` de la
+  línea, para agarrar el ritmo: hace seek a `max(0, startTime - 2)` y
+  reproduce desde ahí. Mientras el audio está antes del `startTime` de la
+  línea, Espacio se sigue interceptando (no marca palabras, y tampoco hace
+  play/pause: la clase `tap-sync-active` sigue activa) y se muestra
+  "Escuchá el inicio…" (`role="status"`) hasta llegar al `startTime`. Con
+  `startTime <= 2s` el seek es a 0 y el pre-roll dura lo que haya; con
+  `startTime === 0` no hay pre-roll. Escape durante el pre-roll sale sin
+  marcar ni limpiar nada más. Es un flujo único (`src/ui/wordSync.ts`,
+  `startCapture()`) que comparten el botón "Capturar palabras" de la lista y
+  el botón del panel de línea seleccionada — no hay dos implementaciones.
+  Esto reemplaza el seek exacto al `startTime` que hacía antes "Capturar
+  palabras" de la lista.
 - El preview usa el mismo motor de renderizado (`src/render/highlighter.ts`)
   que los exportadores — nunca una implementación aparte. Ese módulo separa
   dos responsabilidades: `getRenderableLines(project)` filtra qué líneas y
@@ -170,6 +202,6 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 9 — Modo palabra por palabra. Completo.
 - [ ] Fase 10 — Preview en tiempo real (motor `src/render/highlighter.ts` compartido). Provisional: pendiente verificar el preview en modo palabra.
 - [x] Fase 10b — Layout tipo editor (región de audio persistente + pestañas Preparar/Sincronizar). Completo.
-- [ ] Fase 10c — Re-grabar palabras por línea + panel de línea seleccionada.
+- [x] Fase 10c — Re-grabar palabras por línea + panel de línea seleccionada (pre-roll de 2s). Completo.
 - [ ] Fase 11 — Exportadores (`.lrc`, `.srt`, `.vtt`, `.ass`) sobre `getRenderableLines()`, con pestaña "Exportar".
 - [ ] Fase 12 — Accesibilidad + pulido del flujo (las pestañas ya existen desde la 10b).

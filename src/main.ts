@@ -2,6 +2,9 @@ import "./style.css";
 import { AudioPlayer } from "./audio/player";
 import { History } from "./core/history";
 import {
+  applyWordsTiming,
+  applyWordTiming,
+  computeClearWords,
   computeLineTap,
   computeWordTap,
   createProject,
@@ -9,6 +12,7 @@ import {
   type HistoryEntry,
   type LineTimingPayload,
   type Project,
+  type WordsTimingPayload,
   type WordTimingPayload,
 } from "./core/project";
 import { parseLyrics } from "./core/parser";
@@ -39,6 +43,7 @@ import { setupPreview } from "./ui/preview";
 import { setupFollowPlayback } from "./ui/followPlayback";
 import { setupPlayingLine } from "./ui/playingLine";
 import { setupTabs } from "./ui/tabs";
+import { setupSelectedLinePanel } from "./ui/selectedLinePanel";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -79,6 +84,7 @@ const timelineControls = setupTimeline({
   getLines: () => project?.lines ?? [],
   getAudioDuration: () => player.getDuration() || project?.duration || 0,
   onLineTimingChange: commitLineTiming,
+  onSelectionChange: () => selectedLinePanel.refresh(),
 });
 
 const wordSyncControls = setupWordSync({
@@ -91,6 +97,15 @@ const wordSyncControls = setupWordSync({
       project?.lines.find((line) => line.id === lineId)?.words.find((word) => word.id === wordId)?.endTime ?? null;
     commitWordTiming(lineId, wordId, startTime, currentEndTime);
   },
+  statusElement: els.wordCaptureStatus,
+});
+
+const selectedLinePanel = setupSelectedLinePanel({
+  panel: els.selectedLinePanel,
+  list: els.linesOutput,
+  getProject: () => project,
+  getSelectedLineId: () => timelineControls.getSelectedLineId(),
+  onRecord: rerecordWords,
 });
 
 const previewControls = setupPreview({
@@ -246,28 +261,39 @@ function commitLineTap(lineId: string, startTime: number): void {
 /** Análogo a setLineTimestamps() pero para una palabra dentro de una línea (Fase 9) — no
  * toca el timing de la línea misma. Además de la palabra, aplica en el mismo paso los endTime
  * derivados de otras palabras (`derived`), si los hay. */
-function setWordTimestamps({ lineId, wordId, startTime, endTime, derived = [] }: WordTimingPayload): void {
+function setWordTimestamps(payload: WordTimingPayload): void {
   if (!project) return;
-  const derivedEndTimes = new Map(derived.map((entry) => [entry.wordId, entry.endTime]));
-  project = {
-    ...project,
-    lines: project.lines.map((line) =>
-      line.id !== lineId
-        ? line
-        : {
-            ...line,
-            words: line.words.map((word) => {
-              if (word.id === wordId) return { ...word, startTime, endTime };
-              return derivedEndTimes.has(word.id) ? { ...word, endTime: derivedEndTimes.get(word.id) ?? null } : word;
-            }),
-          },
-    ),
-  };
+  project = { ...project, lines: applyWordTiming(project.lines, payload) };
   renderLines(els.linesOutput, project.lines, project.syncMode);
   wordSyncControls.refresh();
   previewControls.refresh();
   saveProject(project);
   markUnsaved();
+}
+
+/** Aplica el timing de varias palabras de una línea de una vez ("clearWords", Fase 10c): el
+ * before/after de undo/redo y la limpieza al re-grabar. */
+function setWordsTimings(payload: WordsTimingPayload): void {
+  if (!project) return;
+  project = { ...project, lines: applyWordsTiming(project.lines, payload) };
+  renderLines(els.linesOutput, project.lines, project.syncMode);
+  wordSyncControls.refresh();
+  previewControls.refresh();
+  saveProject(project);
+  markUnsaved();
+}
+
+/** "Re-grabar palabras" (panel de línea seleccionada): en UN solo HistoryEntry pone en null el
+ * timing de todas las palabras de la línea y arranca la captura de palabras (con pre-roll). Cada
+ * tap posterior es su propio HistoryEntry. Si no había nada que limpiar no se empuja ninguno. */
+function rerecordWords(lineId: string): void {
+  if (!project) return;
+  const change = computeClearWords(project.lines, lineId);
+  if (change) {
+    history.push({ type: "clearWords", before: change.before, after: change.after, timestamp: Date.now() });
+    setWordsTimings(change.after);
+  }
+  wordSyncControls.startCapture(lineId);
 }
 
 /** Empuja un HistoryEntry "setWordTimestamp" para una palabra y aplica el cambio — usado por
@@ -337,6 +363,13 @@ function applyHistoryEntry(entry: HistoryEntry, side: "before" | "after"): void 
 
   if (entry.type === "setWordTimestamp") {
     setWordTimestamps(entry[side] as WordTimingPayload);
+    return;
+  }
+
+  if (entry.type === "clearWords") {
+    // Una captura en curso quedaría desfasada respecto de las palabras restauradas/limpiadas.
+    wordSyncControls.exitCapture();
+    setWordsTimings(entry[side] as WordsTimingPayload);
     return;
   }
 

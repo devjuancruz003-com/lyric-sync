@@ -1,6 +1,21 @@
 import type { Word } from "../core/project";
 import { findNextUncaptured } from "./tapSync";
 
+/** Segundos de audio ANTES del inicio de la línea desde los que arranca la captura de palabras,
+ * para agarrar el ritmo. Único lugar donde vive este valor. */
+export const WORD_CAPTURE_PREROLL_SEC = 2;
+
+/** Desde dónde arrancar la captura de palabras de una línea que empieza en `lineStartSec`: el
+ * pre-roll antes del inicio, nunca antes de 0 (si la línea empieza a <= 2 s, dura lo que haya). */
+export function getWordCaptureStartTime(lineStartSec: number): number {
+  return Math.max(0, lineStartSec - WORD_CAPTURE_PREROLL_SEC);
+}
+
+/** Mientras el audio esté antes del inicio de la línea (pre-roll) los taps no marcan palabras. */
+export function isInWordCapturePreroll(currentTimeSec: number, lineStartSec: number): boolean {
+  return currentTimeSec < lineStartSec;
+}
+
 export interface WordTapResult {
   wordId: string;
   startTime: number;

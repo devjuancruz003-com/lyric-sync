@@ -10,6 +10,8 @@ export interface AppElements {
   timeDisplay: HTMLElement;
   previewPanel: HTMLElement;
   previewOutput: HTMLElement;
+  selectedLinePanel: HTMLElement;
+  wordCaptureStatus: HTMLElement;
   lyricsInput: HTMLTextAreaElement;
   analyzeButton: HTMLButtonElement;
   tapSyncButton: HTMLButtonElement;
@@ -136,6 +138,7 @@ export function renderLayout(root: HTMLElement): AppElements {
               </label>
             </div>
             <p id="refine-status" class="status" role="status" aria-live="polite"></p>
+            <p id="word-capture-status" class="status" role="status" aria-live="polite"></p>
 
             <div id="lines-scroll" class="lines-scroll">
               <div id="lines-empty" class="lines-empty">
@@ -146,10 +149,21 @@ export function renderLayout(root: HTMLElement): AppElements {
             </div>
           </section>
 
-          <section id="preview-panel" class="panel sync-preview-column" aria-labelledby="preview-heading" hidden>
-            <h2 id="preview-heading">Preview</h2>
-            <div id="preview-output" class="preview-output preview-idle" aria-live="off"><span class="preview-idle-marker" aria-hidden="true">♪</span></div>
-          </section>
+          <div class="sync-side-column">
+            <section id="preview-panel" class="panel" aria-labelledby="preview-heading" hidden>
+              <h2 id="preview-heading">Preview</h2>
+              <div id="preview-output" class="preview-output preview-idle" aria-live="off"><span class="preview-idle-marker" aria-hidden="true">♪</span></div>
+            </section>
+
+            <section id="selected-line-panel" class="panel selected-line-panel" aria-labelledby="selected-line-heading" hidden>
+              <h2 id="selected-line-heading">Línea seleccionada</h2>
+              <p class="selected-line-text"></p>
+              <p class="selected-line-range"></p>
+              <ol class="selected-line-words" aria-label="Palabras de la línea"></ol>
+              <button type="button" class="selected-line-record"></button>
+              <p class="selected-line-hint status" id="selected-line-hint"></p>
+            </section>
+          </div>
         </div>
       </div>
     </div>
@@ -173,6 +187,8 @@ export function renderLayout(root: HTMLElement): AppElements {
     timeDisplay: get("time-display"),
     previewPanel: get("preview-panel"),
     previewOutput: get("preview-output"),
+    selectedLinePanel: get("selected-line-panel"),
+    wordCaptureStatus: get("word-capture-status"),
     lyricsInput: get("lyrics-input"),
     analyzeButton: get("analyze-button"),
     tapSyncButton: get("tap-sync-button"),

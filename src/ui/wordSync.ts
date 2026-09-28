@@ -1,6 +1,6 @@
 import type { AudioPlayer, Unsubscribe } from "../audio/player";
 import type { Line } from "../core/project";
-import { WordSyncSession } from "../sync/wordSync";
+import { getWordCaptureStartTime, isInWordCapturePreroll, WordSyncSession } from "../sync/wordSync";
 import { refreshCaptureButton, setTargetWord } from "./linesPreview";
 
 /** Misma clase que usa la captura de líneas (Fase 6): así el guard de espacio en
@@ -15,6 +15,8 @@ export interface WordSyncOptions {
   getLatencyOffsetMs: () => number;
   /** Aplica la marca de una palabra al estado real (historial, Project, autosave). */
   onWordTap: (lineId: string, wordId: string, startTime: number) => void;
+  /** Texto de estado (role="status") donde se avisa del pre-roll. */
+  statusElement: HTMLElement;
 }
 
 export interface WordSyncControls {
@@ -24,7 +26,13 @@ export interface WordSyncControls {
   /** Sale del modo captura de palabras si está activo, sin pausar el audio. Seguro de
    * llamar siempre (ej. cuando el Project cambia entero). */
   exitCapture(): void;
+  /** Arranca la captura de palabras de una línea (flujo compartido con el botón "Capturar
+   * palabras" de la lista): seek al pre-roll y reproducción. `button` es el botón de la lista
+   * que la disparó, si lo hay. Devuelve false si no pudo arrancar. */
+  startCapture(lineId: string, button?: HTMLButtonElement): boolean;
 }
+
+const PREROLL_MESSAGE = "Escuchá el inicio…";
 
 export function setupWordSync({
   linesOutput,
@@ -32,6 +40,7 @@ export function setupWordSync({
   getLines,
   getLatencyOffsetMs,
   onWordTap,
+  statusElement,
 }: WordSyncOptions): WordSyncControls {
   let activeLineId: string | null = null;
   let session: WordSyncSession | null = null;
@@ -57,6 +66,11 @@ export function setupWordSync({
     button.textContent = "Detener captura";
   }
 
+  function setPrerollStatus(visible: boolean): void {
+    const text = visible ? PREROLL_MESSAGE : "";
+    if (statusElement.textContent !== text) statusElement.textContent = text;
+  }
+
   function stopCapture(pause: boolean): void {
     if (!session) return;
     const lineId = activeLineId;
@@ -67,6 +81,7 @@ export function setupWordSync({
     unsubscribeTimeUpdate?.();
     unsubscribeTimeUpdate = null;
     setTargetWord(linesOutput, null);
+    setPrerollStatus(false);
     // El botón quedó con el label "Detener captura" pisado mientras estuvo activo — sacarlo
     // sin esperar a que algo más re-renderice toda la lista (ej. al salir con Escape).
     const line = lineId ? getLines().find((candidate) => candidate.id === lineId) : undefined;
@@ -78,8 +93,13 @@ export function setupWordSync({
   // las palabras ya no se asignan acá: se derivan en cada marca (ver computeWordTap()).
   function handleTimeUpdate(currentTime: number): void {
     const line = getActiveLine();
-    if (!line || line.endTime === null) return;
-    if (currentTime >= line.endTime) stopCapture(true);
+    if (!line || line.startTime === null || line.endTime === null) return;
+    if (currentTime >= line.endTime) {
+      stopCapture(true);
+      return;
+    }
+    // Pre-roll: el aviso dura hasta llegar al startTime de la línea (y reaparece si se vuelve atrás).
+    setPrerollStatus(isInWordCapturePreroll(currentTime, line.startTime));
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -102,6 +122,9 @@ export function setupWordSync({
     if (!session || !activeLineId) return;
     const line = getActiveLine();
     if (!line) return;
+    // Pre-roll: el audio todavía no llegó a la línea. Espacio se consume (arriba) para que
+    // tampoco haga play/pause, pero no marca ninguna palabra.
+    if (line.startTime !== null && isInWordCapturePreroll(player.getCurrentTime(), line.startTime)) return;
     const result = session.markCurrentWord(line.words, player.getCurrentTime(), getLatencyOffsetMs());
     if (!result) return; // ya se marcaron todas; se sigue escuchando hasta el endTime de la línea
 
@@ -109,27 +132,34 @@ export function setupWordSync({
     highlightCurrentWord();
   }
 
-  function startCaptureForLine(lineId: string, button: HTMLButtonElement): void {
+  function startCaptureForLine(lineId: string, button?: HTMLButtonElement): boolean {
     // La captura de líneas (Fase 6) usa la misma clase; no arrancar las dos a la vez.
-    if (session || document.body.classList.contains(CAPTURE_ACTIVE_CLASS)) return;
+    if (session || document.body.classList.contains(CAPTURE_ACTIVE_CLASS)) return false;
     const line = getLines().find((candidate) => candidate.id === lineId);
-    if (!line || line.startTime === null || line.endTime === null) return;
+    if (!line || line.startTime === null || line.endTime === null) return false;
 
     const newSession = new WordSyncSession(line.words);
-    if (newSession.isDone()) return; // no queda ninguna palabra por marcar
+    if (newSession.isDone()) return false; // no queda ninguna palabra por marcar
 
     session = newSession;
     activeLineId = lineId;
     document.body.classList.add(CAPTURE_ACTIVE_CLASS);
     document.addEventListener("keydown", handleKeydown);
     unsubscribeTimeUpdate = player.onTimeUpdate(handleTimeUpdate);
-    button.textContent = "Detener captura";
-    // Evita que la espaciadora reactive el propio botón (foco tras el click).
-    button.blur();
+    if (button) {
+      button.textContent = "Detener captura";
+      // Evita que la espaciadora reactive el propio botón (foco tras el click).
+      button.blur();
+    }
     highlightCurrentWord();
 
-    player.seek(line.startTime);
+    // Pre-roll: arrancar unos segundos antes de la línea para agarrar el ritmo. Hasta llegar a
+    // su startTime, Espacio no marca (ver handleKeydown) y se avisa con el texto de estado.
+    const seekTime = getWordCaptureStartTime(line.startTime);
+    setPrerollStatus(isInWordCapturePreroll(seekTime, line.startTime));
+    player.seek(seekTime);
     player.play().catch(() => {});
+    return true;
   }
 
   linesOutput.addEventListener("click", (event) => {
@@ -152,5 +182,6 @@ export function setupWordSync({
       applyActiveButtonLabel();
     },
     exitCapture: () => stopCapture(false),
+    startCapture: startCaptureForLine,
   };
 }

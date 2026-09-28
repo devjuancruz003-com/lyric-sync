@@ -132,9 +132,18 @@ body {
   gap: 16px;
 }
 
-/* Preview arriba de la lista en pantallas angostas. */
-.sync-preview-column {
+/* Columna derecha: Preview y, debajo, el panel de línea seleccionada. Arriba de la lista en
+ * pantallas angostas. */
+.sync-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   order: -1;
+  min-height: 0;
+}
+
+.sync-side-column > .panel {
+  flex: none;
 }
 
 .sync-lines-column {
@@ -163,14 +172,14 @@ body {
     gap: 16px;
   }
 
-  /* Sin preview (todavía no hay audio con letra): la lista ocupa todo el ancho. */
-  .sync-panel:has(> .sync-preview-column[hidden]) {
+  /* Sin preview ni panel de línea (todavía no hay audio con letra): la lista ocupa todo el ancho. */
+  .sync-panel:has(#preview-panel[hidden]):has(#selected-line-panel[hidden]) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .sync-preview-column {
+  .sync-side-column {
     order: 0;
-    align-self: start;
+    overflow-y: auto;
   }
 
   .lines-scroll {
@@ -437,6 +446,37 @@ textarea {
 .preview-word-upcoming {
   color: var(--muted);
   opacity: 0.85;
+}
+
+/* Panel de línea seleccionada (Fase 10c). */
+.selected-line-text {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.selected-line-range {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.selected-line-words {
+  margin: 0 0 12px;
+  padding-left: 24px;
+}
+
+.selected-word-range {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.selected-line-record {
+  padding: 6px 14px;
+  font: inherit;
+}
+
+.selected-line-hint {
+  margin: 8px 0 0;
 }
 
 .capture-words-button {

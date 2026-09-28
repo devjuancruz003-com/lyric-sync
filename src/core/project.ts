@@ -34,7 +34,8 @@ export interface HistoryEntry {
     | "shiftOffset"
     | "createProject"
     | "setSyncMode"
-    | "setWordTimestamp";
+    | "setWordTimestamp"
+    | "clearWords";
   before: unknown;
   after: unknown;
   timestamp: number;
@@ -240,4 +241,69 @@ export function normalizeProject(project: Project): Project {
     return { ...line, words };
   });
   return changed ? { ...project, lines } : project;
+}
+
+/** Aplica un payload de "setWordTimestamp" (la palabra y sus `derived`) a las líneas. Pura —
+ * devuelve un array nuevo; sirve igual para el before y el after, y para entradas viejas sin
+ * `derived`. */
+export function applyWordTiming(lines: Line[], payload: WordTimingPayload): Line[] {
+  const { lineId, wordId, startTime, endTime, derived = [] } = payload;
+  const derivedEndTimes = new Map(derived.map((entry) => [entry.wordId, entry.endTime]));
+  return lines.map((line) =>
+    line.id !== lineId
+      ? line
+      : {
+          ...line,
+          words: line.words.map((word) => {
+            if (word.id === wordId) return { ...word, startTime, endTime };
+            return derivedEndTimes.has(word.id) ? { ...word, endTime: derivedEndTimes.get(word.id) ?? null } : word;
+          }),
+        },
+  );
+}
+
+/** Payload de un HistoryEntry "clearWords" (Fase 10c): el timing de varias palabras de UNA línea
+ * (`before` con los valores previos, `after` con los mismos wordId en null). */
+export interface WordsTimingPayload {
+  lineId: string;
+  words: { wordId: string; startTime: number | null; endTime: number | null }[];
+}
+
+/**
+ * Re-grabar las palabras de una línea (Fase 10c): calcula, para UN solo HistoryEntry, poner el
+ * startTime y endTime de TODAS las palabras de la línea en null. Pura. Devuelve null si no hay
+ * nada que limpiar (línea inexistente, sin palabras, o ninguna con timing), para no ensuciar el
+ * historial con un paso vacío.
+ */
+export function computeClearWords(
+  lines: Line[],
+  lineId: string,
+): { before: WordsTimingPayload; after: WordsTimingPayload } | null {
+  const line = lines.find((candidate) => candidate.id === lineId);
+  if (!line || line.words.length === 0) return null;
+  if (line.words.every((word) => word.startTime === null && word.endTime === null)) return null;
+
+  return {
+    before: {
+      lineId,
+      words: line.words.map((word) => ({ wordId: word.id, startTime: word.startTime, endTime: word.endTime })),
+    },
+    after: { lineId, words: line.words.map((word) => ({ wordId: word.id, startTime: null, endTime: null })) },
+  };
+}
+
+/** Aplica un payload de "clearWords" (before o after) a las líneas. Pura. */
+export function applyWordsTiming(lines: Line[], payload: WordsTimingPayload): Line[] {
+  const timings = new Map(payload.words.map((entry) => [entry.wordId, entry]));
+  return lines.map((line) =>
+    line.id !== payload.lineId
+      ? line
+      : {
+          ...line,
+          words: line.words.map((word) => {
+            const timing = timings.get(word.id);
+            return timing ? { ...word, startTime: timing.startTime, endTime: timing.endTime } : word;
+          }),
+        },
+  );
 }

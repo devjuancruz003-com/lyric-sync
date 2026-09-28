@@ -26,6 +26,8 @@ export interface TimelineOptions {
    * entrar a refinamiento, nudge por teclado o arrastre con mouse) — quien la usa decide
    * cómo empujar el HistoryEntry y persistir. */
   onLineTimingChange: (lineId: string, startTime: number | null, endTime: number | null) => void;
+  /** Se llama cuando cambia la línea seleccionada (o se deselecciona: `null`). */
+  onSelectionChange?: (lineId: string | null) => void;
 }
 
 export interface TimelineControls {
@@ -35,6 +37,8 @@ export interface TimelineControls {
   /** Deselecciona sin tocar las regions — usar cuando el Project cambia entero (la selección
    * anterior ya no corresponde a una línea válida; quien llama re-renderiza las regions). */
   exitSelection(): void;
+  /** Id de la línea seleccionada (click en la lista o en su region), o null. */
+  getSelectedLineId(): string | null;
 }
 
 export function setupTimeline({
@@ -45,6 +49,7 @@ export function setupTimeline({
   getLines,
   getAudioDuration,
   onLineTimingChange,
+  onSelectionChange,
 }: TimelineOptions): TimelineControls {
   let selectedLineId: string | null = null;
   let activeEdge: LineEdge = "start";
@@ -61,6 +66,7 @@ export function setupTimeline({
     activeEdge = "start";
     document.body.classList.add(SELECTION_ACTIVE_CLASS);
     applySelectionHighlight();
+    onSelectionChange?.(selectedLineId);
   }
 
   function deselect(): void {
@@ -68,6 +74,7 @@ export function setupTimeline({
     selectedLineId = null;
     document.body.classList.remove(SELECTION_ACTIVE_CLASS);
     applySelectionHighlight();
+    onSelectionChange?.(null);
   }
 
   function applyNudge(deltaSec: number): void {
@@ -152,5 +159,6 @@ export function setupTimeline({
     },
     refreshSelectionHighlight: applySelectionHighlight,
     exitSelection: deselect,
+    getSelectedLineId: () => selectedLineId,
   };
 }
