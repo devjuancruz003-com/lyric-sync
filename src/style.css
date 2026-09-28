@@ -25,9 +25,14 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
   background: var(--bg);
   color: var(--text);
+}
+
+/* Los paneles/pestañas ocultos con el atributo `hidden` no deben ser pisados por un `display`
+ * de las reglas de layout de abajo (así sus controles tampoco son enfocables). */
+[hidden] {
+  display: none !important;
 }
 
 /* Visualmente oculto pero legible por lectores de pantalla — reutilizable en toda la app,
@@ -45,24 +50,129 @@ body {
   border: 0;
 }
 
-.app-header {
-  padding: 16px 24px;
+/* --- Shell tipo editor (Fase 10b) ---
+ * De arriba hacia abajo: barra superior con pestañas, región de audio siempre visible y el
+ * contenido de la pestaña activa. Pantallas angostas: flujo normal con scroll de página; desde
+ * 900px, altura fija de viewport y cada zona scrollea por dentro (min-height: 0 en toda la
+ * cadena flex/grid para que el overflow de la lista funcione). */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 0 16px 16px;
+}
+
+.app-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 10px 0 0;
   border-bottom: 1px solid var(--border);
 }
 
-.app-header h1 {
+.app-topbar h1 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
 }
 
-.app-main {
+.tabs {
+  display: flex;
+  gap: 4px;
+  align-self: flex-end;
+}
+
+.tab {
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.prepare-panel {
   display: grid;
-  /* minmax(0, …): que el waveform con zoom scrollee por dentro en vez de ensanchar la columna. */
-  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   gap: 16px;
-  max-width: 1000px;
+  width: 100%;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 16px;
+  overflow-y: auto;
+}
+
+.sync-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Preview arriba de la lista en pantallas angostas. */
+.sync-preview-column {
+  order: -1;
+}
+
+.sync-lines-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.lines-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 60dvh;
+}
+
+@media (min-width: 900px) {
+  .app-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sync-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  /* Sin preview (todavía no hay audio con letra): la lista ocupa todo el ancho. */
+  .sync-panel:has(> .sync-preview-column[hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sync-preview-column {
+    order: 0;
+    align-self: start;
+  }
+
+  .lines-scroll {
+    flex: 1;
+    max-height: none;
+  }
 }
 
 .panel {
@@ -149,19 +259,64 @@ textarea {
   margin-top: 12px;
 }
 
-.lyrics-actions button {
+.lyrics-actions button,
+.sync-toolbar button,
+.lines-empty button {
   padding: 6px 14px;
   font: inherit;
 }
 
-.sync-mode-field {
+.audio-region {
+  padding: 12px 16px;
+}
+
+.audio-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+.audio-source .file-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audio-source .status {
+  margin: 0;
+}
+
+.audio-region .waveform {
+  margin-top: 8px;
+}
+
+.audio-region .controls {
+  margin-top: 8px;
+}
+
+.sync-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.sync-mode-field,
+.follow-field {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
+.lines-empty {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--muted);
+}
+
 .lines-output {
-  margin: 16px 0 0;
+  margin: 0;
   padding-left: 28px;
 }
 
@@ -288,8 +443,6 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  max-width: 1000px;
-  margin: 16px auto 0;
   padding: 12px 16px;
   background: var(--panel);
   border: 1px solid var(--accent);

@@ -34,6 +34,8 @@ import { setupTapSync } from "./ui/tapSync";
 import { setupTimeline } from "./ui/timeline";
 import { setupWordSync } from "./ui/wordSync";
 import { setupPreview } from "./ui/preview";
+import { setupFollowPlayback } from "./ui/followPlayback";
+import { setupTabs } from "./ui/tabs";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -97,6 +99,29 @@ const previewControls = setupPreview({
   getProject: () => project,
 });
 
+const followControls = setupFollowPlayback({
+  scroller: els.linesScroll,
+  list: els.linesOutput,
+  checkbox: els.followCheckbox,
+  player,
+  getProject: () => project,
+});
+
+const tabs = setupTabs({
+  tabList: els.tabList,
+  // Con la pestaña oculta la lista no tiene layout: al mostrarla, llevar a la vista lo actual.
+  onChange: (id) => {
+    if (id === "sync") followControls.scrollToCurrent();
+  },
+});
+
+els.goPrepareButton.addEventListener("click", () => tabs.select("prepare"));
+
+/** Estado vacío de la lista de líneas (sin letra analizada todavía). */
+function updateLinesEmptyState(): void {
+  els.linesEmpty.hidden = !!project && project.lines.length > 0;
+}
+
 /** El preview aplica siempre que haya un Project con audio cargado (no solo durante captura). */
 function updatePreview(): void {
   els.previewPanel.hidden = !(project && loadedAudio);
@@ -150,6 +175,7 @@ function applyProject(next: Project | null): void {
   updateTapSyncButton();
   updateTimelineButton();
   updateSyncModeSelect();
+  updateLinesEmptyState();
   updatePreview();
 }
 
@@ -260,6 +286,7 @@ const lyricsControls = setupLyricsInput({
     applyProject(after);
     saveProject(after);
     markUnsaved();
+    if (after.lines.length > 0) tabs.select("sync");
   },
 });
 
@@ -366,6 +393,10 @@ if (restored) {
   els.audioStatus.textContent =
     "Se restauró tu letra sincronizada — volvé a cargar el archivo de audio para continuar.";
 }
+updateLinesEmptyState();
+
+// Pestaña inicial: con líneas restauradas se abre directo en "Sincronizar".
+tabs.select(restored && restored.lines.length > 0 ? "sync" : "prepare");
 
 // --- Advertencia nativa al cerrar/recargar con cambios sin exportar ---
 

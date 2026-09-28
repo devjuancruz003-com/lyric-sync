@@ -104,6 +104,23 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   (`linesPreview.ts`, que sigue siendo la vista de edición): sin botones, se
   actualiza solo mientras suena el audio y es visible siempre que haya un
   Project con audio cargado, no solo durante la captura.
+- Layout tipo editor (Fase 10b): la app ocupa el viewport (100dvh, sin scroll
+  de página en pantallas anchas) con barra superior y pestañas "Preparar" |
+  "Sincronizar" (Exportar se agrega en la Fase 11). La región de audio (input,
+  waveform, transporte, calibración) vive fuera de los tabpanels y es siempre
+  visible: la instancia de wavesurfer NO se destruye ni se recrea al cambiar de
+  pestaña (los paneles solo se ocultan con `hidden`), así la reproducción no se
+  corta. "Preparar" = letra + Proyecto (importar/exportar); al analizar la
+  letra con éxito se pasa solo a "Sincronizar". "Sincronizar" = lista de
+  líneas con barra de herramientas y scroll propio (izquierda, ~60%) + preview
+  (derecha, ~40%); bajo ~900px es una sola columna con el preview arriba. Al
+  iniciar, se abre en "Sincronizar" si el proyecto restaurado tiene líneas. Las
+  pestañas siguen el patrón ARIA tabs; ←/→ navegan entre ellas solo con el foco
+  en una pestaña.
+- "Seguir reproducción" (casilla, activada por defecto): la lista scrollea su
+  propio contenedor (no `scrollIntoView`, que movería la página), sin
+  animación y solo cuando cambia la línea objetivo de captura o la línea que
+  suena; durante la captura manda la línea objetivo.
 - Toda la app debe ser operable por teclado (sin depender del mouse).
 - Autosave a `localStorage` en cada cambio + warning nativo del navegador
   (`beforeunload`) si hay cambios sin exportar, porque no hay cuenta ni nube.
@@ -119,4 +136,8 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 7 — Refinamiento manual (regions en waveform + nudging por teclado). Completo.
 - [x] Fase 8 — Validación de timing (avisos no bloqueantes). Completo.
 - [x] Fase 9 — Modo palabra por palabra. Completo.
-- [ ] Fase 10 — Preview en tiempo real (motor `src/render/highlighter.ts` compartido). Implementada, provisional hasta verificar el preview en modo palabra en el navegador.
+- [ ] Fase 10 — Preview en tiempo real (motor `src/render/highlighter.ts` compartido). Provisional: pendiente verificar el preview en modo palabra.
+- [x] Fase 10b — Layout tipo editor (región de audio persistente + pestañas Preparar/Sincronizar). Completo.
+- [ ] Fase 10c — Re-grabar palabras por línea + panel de línea seleccionada.
+- [ ] Fase 11 — Exportadores (`.lrc`, `.srt`, `.vtt`, `.ass`) sobre `getRenderableLines()`, con pestaña "Exportar".
+- [ ] Fase 12 — Accesibilidad + pulido del flujo (las pestañas ya existen desde la 10b).
