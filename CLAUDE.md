@@ -208,6 +208,33 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   color de fondo se pasa como `var(--region-N)"` y sí cruza el shadow
   boundary); el número y su recorte (`overflow: hidden`) se aplican en línea
   desde `player.ts`, no por CSS.
+- Vista de palabras dentro de "Refinar timing" en modo Palabra (Fase 10d-2):
+  al seleccionar (misma selección de `src/ui/timeline.ts`, sin otro
+  mecanismo) una línea con TODAS sus palabras capturadas, las regions de
+  línea se reemplazan por una region por palabra (mismo enfoque en línea de
+  la Fase 10d-1 para color/número — reutiliza la paleta, no define una
+  nueva — porque wavesurfer.js v8 sigue renderizando dentro de un shadow
+  root) y el zoom pasa a encuadrar el rango de esa línea. Con captura
+  parcial NO cambia de vista (el panel de línea seleccionada explica por
+  qué); tampoco con una captura activa. Al salir (Escape sin palabra
+  elegida, deseleccionar la línea, o cambiar a modo Línea) se restauran el
+  zoom Y el scroll exactos de antes — no solo el nivel de zoom, porque un
+  scroll que quedó centrado en el rango angosto de la línea puede dejar la
+  waveform mirando un tramo sin regions dibujadas. Arrastrar o nudgear un
+  borde tiene límites duros (nunca avisos): no sale de `[line.startTime,
+  line.endTime]`, nunca invierte ni baja de `WORD_MIN_LENGTH_SEC` (0.03s), y
+  no cruza el límite propio de la palabra vecina. Si el borde ya estaba
+  pegado al de la vecina (se tocan) ANTES del movimiento, las dos palabras
+  se mueven juntas al mismo valor, en el MISMO `HistoryEntry`
+  "setWordTimestamp" (la vecina va en `derived`, con su `startTime` o
+  `endTime` según cuál borde compartían — `derived` ya no es solo para
+  `endTime` como en la Fase 9/10c), así un solo Ctrl+Z revierte el par
+  completo; con hueco, cada borde se mueve independiente. Nudging por
+  teclado: ←/→ mueven el borde activo `WORD_NUDGE_MS` (10ms),
+  Shift+←/→ `WORD_NUDGE_SHIFT_MS` (50ms), Tab alterna borde activo, ↑/↓
+  cambian la palabra seleccionada (sin tocar timing) a la anterior/siguiente
+  de la línea, Escape deselecciona la palabra y solo con nada elegido sale
+  de la vista. Constantes en un solo lugar: `src/sync/wordTimeline.ts`.
 - Toda la app debe ser operable por teclado (sin depender del mouse).
 - Autosave a `localStorage` en cada cambio + warning nativo del navegador
   (`beforeunload`) si hay cambios sin exportar, porque no hay cuenta ni nube.
@@ -227,7 +254,7 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 10b — Layout tipo editor (región de audio persistente + pestañas Preparar/Sincronizar). Completo.
 - [x] Fase 10c — Re-grabar palabras por línea + panel de línea seleccionada (pre-roll de 2s). Completo.
 - [x] Fase 10d-1 — Números y colores en regions de líneas + chips en la lista. Completo.
-- [ ] Fase 10d-2 — Refinamiento manual por palabra.
+- [x] Fase 10d-2 — Refinamiento manual por palabra (zoom automático, límites duros, bordes compartidos). Completo.
 - [ ] Fase 10d-3 — Acople línea→palabras (mover/ajustar la línea repercute en sus palabras).
 - [ ] Fase 11 — Exportadores (`.lrc`, `.srt`, `.vtt`, `.ass`) sobre `getRenderableLines()`, con pestaña "Exportar".
 - [ ] Fase 12 — Accesibilidad + pulido del flujo (las pestañas ya existen desde la 10b).

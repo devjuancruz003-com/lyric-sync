@@ -159,6 +159,7 @@ export function renderLayout(root: HTMLElement): AppElements {
               <h2 id="selected-line-heading">Línea seleccionada</h2>
               <p class="selected-line-text"></p>
               <p class="selected-line-range"></p>
+              <p class="selected-line-word-view-hint status"></p>
               <ol class="selected-line-words" aria-label="Palabras de la línea"></ol>
               <button type="button" class="selected-line-record"></button>
               <p class="selected-line-hint status" id="selected-line-hint"></p>

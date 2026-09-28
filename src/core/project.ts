@@ -75,14 +75,17 @@ export function deriveMissingWordEndTimes(words: Word[], lineEndTime: number | n
 }
 
 /** Payload de un HistoryEntry "setWordTimestamp" (`before` y `after` comparten forma). `derived`
- * lleva los endTime de OTRAS palabras que cambiaron en el mismo paso (la anterior al marcar la
- * siguiente); es opcional para que las entradas viejas, sin `derived`, sigan aplicándose igual. */
+ * lleva los cambios de OTRAS palabras en el mismo paso — la anterior al marcar la siguiente
+ * (Fase 9, solo `endTime`), o la vecina cuyo borde compartido se movió junto con el de `wordId`
+ * (Fase 10d-2, `startTime` o `endTime` según cuál borde compartían). Cada entrada trae solo los
+ * campos que cambian; es opcional para que las entradas viejas, sin `derived`, sigan
+ * aplicándose igual. */
 export interface WordTimingPayload {
   lineId: string;
   wordId: string;
   startTime: number | null;
   endTime: number | null;
-  derived?: { wordId: string; endTime: number | null }[];
+  derived?: { wordId: string; startTime?: number | null; endTime?: number | null }[];
 }
 
 /**
@@ -243,12 +246,14 @@ export function normalizeProject(project: Project): Project {
   return changed ? { ...project, lines } : project;
 }
 
-/** Aplica un payload de "setWordTimestamp" (la palabra y sus `derived`) a las líneas. Pura —
- * devuelve un array nuevo; sirve igual para el before y el after, y para entradas viejas sin
- * `derived`. */
+/** Aplica un payload de "setWordTimestamp" (la palabra y sus `derived`) a las líneas. Cada
+ * entrada de `derived` solo toca los campos que trae (`startTime`/`endTime`, cada uno
+ * opcional) — el resto de esa palabra queda igual. Pura — devuelve un array nuevo; sirve igual
+ * para el before y el after, y para entradas viejas sin `derived` o con `derived` de solo
+ * `endTime` (Fase 9). */
 export function applyWordTiming(lines: Line[], payload: WordTimingPayload): Line[] {
   const { lineId, wordId, startTime, endTime, derived = [] } = payload;
-  const derivedEndTimes = new Map(derived.map((entry) => [entry.wordId, entry.endTime]));
+  const derivedById = new Map(derived.map((entry) => [entry.wordId, entry]));
   return lines.map((line) =>
     line.id !== lineId
       ? line
@@ -256,10 +261,76 @@ export function applyWordTiming(lines: Line[], payload: WordTimingPayload): Line
           ...line,
           words: line.words.map((word) => {
             if (word.id === wordId) return { ...word, startTime, endTime };
-            return derivedEndTimes.has(word.id) ? { ...word, endTime: derivedEndTimes.get(word.id) ?? null } : word;
+            const patch = derivedById.get(word.id);
+            if (!patch) return word;
+            return {
+              ...word,
+              ...(patch.startTime !== undefined && { startTime: patch.startTime }),
+              ...(patch.endTime !== undefined && { endTime: patch.endTime }),
+            };
           }),
         },
   );
+}
+
+/** Palabra ya capturada (startTime/endTime no nulos) — la vista de palabras (Fase 10d-2) solo
+ * existe con TODAS las palabras de la línea en este estado. */
+export interface TimedWord {
+  id: string;
+  startTime: number;
+  endTime: number;
+}
+
+/** Una palabra (o dos, si el borde movido era compartido con su vecina) con su nuevo
+ * startTime/endTime — resultado de `computeWordEdgeMove()` en `src/sync/wordTimeline.ts`. */
+export interface WordEdgeUpdate {
+  wordId: string;
+  startTime: number;
+  endTime: number;
+}
+
+/**
+ * Al arrastrar o nudgear un borde de palabra (Fase 10d-2), calcula el `before`/`after` de UN
+ * solo HistoryEntry "setWordTimestamp" a partir de `updates` (1 o 2 entradas de
+ * computeWordEdgeMove — 2 cuando el borde era compartido con la vecina): la primera es la
+ * palabra "principal" del entry, el resto va en `derived`. Pura — devuelve null si `updates`
+ * está vacío o la palabra principal no existe en la línea.
+ */
+export function computeWordEdgeCommit(
+  line: Line,
+  updates: WordEdgeUpdate[],
+): { before: WordTimingPayload; after: WordTimingPayload } | null {
+  if (updates.length === 0) return null;
+  const [primary, ...rest] = updates;
+  const currentPrimary = line.words.find((word) => word.id === primary.wordId);
+  if (!currentPrimary) return null;
+
+  const derivedBefore = rest.map((update) => {
+    const original = line.words.find((word) => word.id === update.wordId);
+    return { wordId: update.wordId, startTime: original?.startTime ?? null, endTime: original?.endTime ?? null };
+  });
+  const derivedAfter = rest.map((update) => ({
+    wordId: update.wordId,
+    startTime: update.startTime,
+    endTime: update.endTime,
+  }));
+
+  return {
+    before: {
+      lineId: line.id,
+      wordId: primary.wordId,
+      startTime: currentPrimary.startTime,
+      endTime: currentPrimary.endTime,
+      ...(derivedBefore.length > 0 && { derived: derivedBefore }),
+    },
+    after: {
+      lineId: line.id,
+      wordId: primary.wordId,
+      startTime: primary.startTime,
+      endTime: primary.endTime,
+      ...(derivedAfter.length > 0 && { derived: derivedAfter }),
+    },
+  };
 }
 
 /** Payload de un HistoryEntry "clearWords" (Fase 10c): el timing de varias palabras de UNA línea

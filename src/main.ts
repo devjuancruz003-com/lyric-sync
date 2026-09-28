@@ -6,12 +6,15 @@ import {
   applyWordTiming,
   computeClearWords,
   computeLineTap,
+  computeWordEdgeCommit,
   computeWordTap,
   createProject,
   normalizeProject,
   type HistoryEntry,
+  type Line,
   type LineTimingPayload,
   type Project,
+  type WordEdgeUpdate,
   type WordsTimingPayload,
   type WordTimingPayload,
 } from "./core/project";
@@ -45,6 +48,7 @@ import { setupPlayingLine } from "./ui/playingLine";
 import { setupTabs } from "./ui/tabs";
 import { setupSelectedLinePanel } from "./ui/selectedLinePanel";
 import { setupRegionChips } from "./ui/regionChips";
+import { setupWordTimeline } from "./ui/wordTimeline";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -85,7 +89,12 @@ const timelineControls = setupTimeline({
   getLines: () => project?.lines ?? [],
   getAudioDuration: () => player.getDuration() || project?.duration || 0,
   onLineTimingChange: commitLineTiming,
-  onSelectionChange: () => selectedLinePanel.refresh(),
+  // ui/timeline.ts no re-renderiza la lista al seleccionar/deseleccionar una línea (solo el
+  // resaltado) — sin este aviso explícito, ni el panel ni la vista de palabras se enterarían.
+  onSelectionChange: () => {
+    wordTimelineControls.refresh();
+    selectedLinePanel.refresh();
+  },
 });
 
 const wordSyncControls = setupWordSync({
@@ -103,13 +112,30 @@ const wordSyncControls = setupWordSync({
 
 setupRegionChips({ list: els.linesOutput, player, getProject: () => project });
 
+const wordTimelineControls = setupWordTimeline({
+  player,
+  list: els.linesOutput,
+  getProject: () => project,
+  getSelectedLineId: () => timelineControls.getSelectedLineId(),
+  commitEdgeMove: commitWordEdgeMove,
+  refreshLineHighlight: () => timelineControls.refreshSelectionHighlight(),
+});
+// Dependencia circular resuelta con un setter: la vista de palabras necesita
+// getSelectedLineId() de timelineControls, y timelineControls necesita saber si esa vista está
+// activa para cederle el teclado por completo.
+timelineControls.setWordViewActiveGetter(() => wordTimelineControls.isActive());
+timelineControls.setExitWordView(() => wordTimelineControls.exitIfActive());
+
 const selectedLinePanel = setupSelectedLinePanel({
   panel: els.selectedLinePanel,
   list: els.linesOutput,
   getProject: () => project,
   getSelectedLineId: () => timelineControls.getSelectedLineId(),
   onRecord: rerecordWords,
+  getSelectedWord: () => wordTimelineControls.getSelectedWord(),
+  onSelectWord: (wordId) => wordTimelineControls.selectWord(wordId),
 });
+wordTimelineControls.onChange(() => selectedLinePanel.refresh());
 
 const previewControls = setupPreview({
   output: els.previewOutput,
@@ -306,6 +332,20 @@ function commitWordTiming(lineId: string, wordId: string, startTime: number | nu
   const line = project?.lines.find((candidate) => candidate.id === lineId);
   if (!line) return;
   const change = computeWordTap(line, wordId, startTime, endTime);
+  if (!change) return;
+  history.push({ type: "setWordTimestamp", before: change.before, after: change.after, timestamp: Date.now() });
+  setWordTimestamps(change.after);
+}
+
+/** Empuja un HistoryEntry "setWordTimestamp" para el arrastre o nudging de un borde de palabra
+ * en la vista de palabras (Fase 10d-2) — usado tanto por el drag (evento region-updated) como
+ * por el nudging por teclado de ui/wordTimeline.ts. `updates` trae 1 o 2 entradas (2 cuando el
+ * borde movido era compartido con la vecina); ambas van en el MISMO entry (la segunda como
+ * `derived`), así un solo Ctrl+Z revierte el par completo. */
+function commitWordEdgeMove(line: Line, updates: WordEdgeUpdate[]): void {
+  const currentLine = project?.lines.find((candidate) => candidate.id === line.id);
+  if (!currentLine) return;
+  const change = computeWordEdgeCommit(currentLine, updates);
   if (!change) return;
   history.push({ type: "setWordTimestamp", before: change.before, after: change.after, timestamp: Date.now() });
   setWordTimestamps(change.after);

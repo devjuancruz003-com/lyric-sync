@@ -3,6 +3,7 @@ import RegionsPlugin, { type Region } from "wavesurfer.js/plugins/regions";
 import type { Line } from "../core/project";
 import { getLineColorIndex, getLineColorVar } from "../core/lineColors";
 import type { LineEdge } from "../sync/timeline";
+import { WORD_MIN_LENGTH_SEC } from "../sync/wordTimeline";
 
 export type Unsubscribe = () => void;
 
@@ -13,17 +14,18 @@ const ZOOM_STEP = 2;
 const MIN_REGION_LENGTH_SEC = 0.05;
 
 /**
- * Contenido de una region: el número de línea (1-based, igual al que muestra la lista), con un
- * fondo oscuro translúcido fijo (no la paleta) para leerse igual sobre cualquiera de los 6
- * colores y en los dos temas — el color nunca es la única forma de identificar la línea. Estilos
- * en línea (no una clase de style.css): wavesurfer.js v8 renderiza dentro de un shadow root
- * propio, que una hoja de estilos externa no puede atravesar con selectores de clase/atributo
- * (una custom property como `var(--accent)` sí cruza el shadow boundary, un `.region-number {}`
- * no).
+ * Contenido de una region: el número de línea o palabra (1-based, igual al que muestra la
+ * lista/el panel — `label`, si viene, agrega el texto de la palabra), con un fondo oscuro
+ * translúcido fijo (no la paleta) para leerse igual sobre cualquiera de los 6 colores y en los
+ * dos temas — el color nunca es la única forma de identificar la línea/palabra. Estilos en línea
+ * (no una clase de style.css): wavesurfer.js v8 renderiza dentro de un shadow root propio, que
+ * una hoja de estilos externa no puede atravesar con selectores de clase/atributo (una custom
+ * property como `var(--accent)` sí cruza el shadow boundary, un `.region-number {}` no) — mismo
+ * enfoque para las regions de palabra de la Fase 10d-2, no uno nuevo.
  */
-function createRegionNumber(position: number): HTMLElement {
+function createRegionNumber(position: number, label?: string): HTMLElement {
   const span = document.createElement("span");
-  span.textContent = String(position + 1);
+  span.textContent = label ? `${position + 1} ${label}` : String(position + 1);
   Object.assign(span.style, {
     display: "inline-block",
     margin: "2px",
@@ -136,6 +138,48 @@ export class AudioPlayer {
     }
   }
 
+  /**
+   * Nivel de zoom y posición de scroll actuales (el tiempo que queda al borde izquierdo de lo
+   * visible), para guardarlos antes de entrar a la vista de palabras (Fase 10d-2) y
+   * restaurarlos con restoreViewState() al salir — no solo el zoom: sin el scroll, volver a un
+   * nivel de zoom acotado pero con el scroll donde lo dejó el rango de la línea (mucho más
+   * angosto) puede dejar la waveform mirando un tramo sin nada dibujado.
+   */
+  getViewState(): { pxPerSec: number; scrollTime: number } {
+    const effectivePxPerSec = this.pxPerSec || this.getFitPxPerSec();
+    return { pxPerSec: this.pxPerSec, scrollTime: effectivePxPerSec ? this.ws.getScroll() / effectivePxPerSec : 0 };
+  }
+
+  /** Vuelve al zoom y scroll guardados con getViewState() — a diferencia de setZoom(), que
+   * centra el scroll en el cursor de reproducción, acá se restaura la posición exacta de antes. */
+  restoreViewState(state: { pxPerSec: number; scrollTime: number }): void {
+    if (!this.ws.getDuration()) return;
+    const fit = this.getFitPxPerSec();
+    this.pxPerSec = state.pxPerSec <= fit ? 0 : Math.min(state.pxPerSec, MAX_PX_PER_SEC);
+    this.ws.zoom(this.pxPerSec);
+    this.ws.setScrollTime(state.scrollTime);
+  }
+
+  /**
+   * Zoom para que `[start, end]` ocupe la mayor parte del ancho visible con un margen chico a
+   * los costados (10% del ancho, repartido a ambos lados), y centra el scroll en ese rango — a
+   * diferencia de setZoom(), que centra en el cursor de reproducción. La usa la vista de
+   * palabras (Fase 10d-2) al seleccionar una línea con todas sus palabras capturadas.
+   */
+  zoomToRange(start: number, end: number): void {
+    const duration = this.ws.getDuration();
+    if (!duration) return;
+    const span = Math.max(end - start, 0.001);
+    const targetPxPerSec = (this.container.clientWidth * 0.9) / span;
+    this.pxPerSec = Math.max(this.getFitPxPerSec(), Math.min(targetPxPerSec, MAX_PX_PER_SEC));
+    this.ws.zoom(this.pxPerSec);
+    if (this.pxPerSec > 0) {
+      const visibleSeconds = this.container.clientWidth / this.pxPerSec;
+      const center = (start + end) / 2;
+      this.ws.setScrollTime(Math.max(0, center - visibleSeconds / 2));
+    }
+  }
+
   zoomIn(): void {
     const current = Math.max(this.pxPerSec, this.getFitPxPerSec());
     this.setZoom(current * ZOOM_STEP);
@@ -215,9 +259,38 @@ export class AudioPlayer {
     });
   }
 
-  /** Mueve la region de `lineId` a la posición dada (ej. para reflejar un nudge por teclado o un undo/redo). */
+  /** Mueve la region de `lineId` a la posición dada (ej. para reflejar un nudge por teclado o un
+   * undo/redo). Genérica por id: también la usa la vista de palabras (Fase 10d-2) para
+   * reposicionar la region de una word tras un commit — si no hay ninguna region con ese id
+   * (ej. no se está en esa vista), no hace nada. */
   updateRegion(lineId: string, start: number, end: number): void {
     this.findRegion(lineId)?.setOptions({ start, end });
+  }
+
+  /**
+   * Reemplaza todas las regions por una por cada palabra de `words` (deben tener startTime y
+   * endTime — la vista de palabras, Fase 10d-2, solo existe con la línea completamente
+   * capturada). Mismo color que renderLineRegions() pero por posición DENTRO de la línea, y sin
+   * `drag` (solo se arrastran los bordes, nunca la region completa) — reutiliza la paleta de la
+   * Fase 10d-1, no define una nueva.
+   */
+  renderWordRegions(words: { id: string; text: string; startTime: number; endTime: number }[]): void {
+    this.regions.clearRegions();
+    words.forEach((word, position) => {
+      const region = this.regions.addRegion({
+        id: word.id,
+        start: word.startTime,
+        end: word.endTime,
+        color: getLineColorVar(getLineColorIndex(position)),
+        content: createRegionNumber(position, word.text),
+        drag: false,
+        resize: true,
+        resizeStart: true,
+        resizeEnd: true,
+        minLength: WORD_MIN_LENGTH_SEC,
+      });
+      if (region.element) region.element.style.overflow = "hidden";
+    });
   }
 
   /** Si `lineId` tiene una region dibujada en la waveform ahora mismo (solo las líneas ya

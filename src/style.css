@@ -501,6 +501,11 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* Aviso de la vista de palabras (Fase 10d-2): captura parcial, no se puede entrar todavía. */
+.selected-line-word-view-hint {
+  margin: 0 0 8px;
+}
+
 .selected-line-words {
   margin: 0 0 12px;
   padding-left: 24px;
@@ -509,6 +514,27 @@ textarea {
 .selected-word-range {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Borde activo de la palabra seleccionada (Fase 10d-2) — mismo lenguaje que el indicador de
+ * borde de las regions (color de handle), pero en el texto del panel. */
+.selected-word-edge.active-edge {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.selected-line-words li.selected-word-clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 3px;
+  margin: -1px -3px;
+}
+
+/* Fila de la palabra seleccionada en la vista de palabras — mismo lenguaje visual que
+ * .selected-line en la lista de líneas (outline, sin fondo). */
+.selected-line-words li.selected-word {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .selected-line-record {

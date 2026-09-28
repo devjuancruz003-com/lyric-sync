@@ -39,6 +39,15 @@ export interface TimelineControls {
   exitSelection(): void;
   /** Id de la línea seleccionada (click en la lista o en su region), o null. */
   getSelectedLineId(): string | null;
+  /** Mientras la vista de palabras (Fase 10d-2) está activa, el teclado de líneas (Tab/flechas/
+   * Escape de ESTE módulo) cede el paso por completo — esa vista maneja el suyo. Se fija después
+   * de construir ambos módulos (dependencia circular: la vista de palabras necesita
+   * getSelectedLineId de acá). */
+  setWordViewActiveGetter(getter: () => boolean): void;
+  /** Se fija junto con setWordViewActiveGetter — cierra limpio la vista de palabras (si está
+   * activa) antes de acciones que tocan las regions/la selección por su cuenta (ej. "Refinar
+   * timing"), para que no quede "colgada" ni se mezcle con las regions de línea. */
+  setExitWordView(fn: () => void): void;
 }
 
 export function setupTimeline({
@@ -53,6 +62,8 @@ export function setupTimeline({
 }: TimelineOptions): TimelineControls {
   let selectedLineId: string | null = null;
   let activeEdge: LineEdge = "start";
+  let isWordViewActive: () => boolean = () => false;
+  let exitWordView: () => void = () => {};
 
   function applySelectionHighlight(): void {
     setSelectedLine(linesOutput, selectedLineId);
@@ -92,6 +103,9 @@ export function setupTimeline({
   function handleKeydown(event: KeyboardEvent): void {
     // Un modal (ej. calibración) también puede estar escuchando el teclado; no pisarlo.
     if (document.querySelector('[role="dialog"]')) return;
+    // La vista de palabras (Fase 10d-2) maneja su propio teclado mientras está activa (incluido
+    // su Escape, que primero deselecciona la palabra y recién después sale de la vista).
+    if (isWordViewActive()) return;
 
     if (event.key === "Escape") {
       if (selectedLineId !== null) {
@@ -134,6 +148,11 @@ export function setupTimeline({
   });
 
   refineButton.addEventListener("click", () => {
+    // La vista de palabras (Fase 10d-2) reemplaza las regions de línea por unas de palabra y
+    // guarda su propio zoom/scroll para restaurarlos al salir — si sigue activa cuando esto
+    // corre, su reaplicación en el próximo re-render de la lista pisaría las regions de línea
+    // que "Refinar timing" está por dibujar. Cerrarla primero deja todo en un estado limpio.
+    exitWordView();
     const lines = getLines();
     if (!lines.some((line) => line.startTime !== null)) {
       refineStatus.textContent = NO_LINES_MESSAGE;
@@ -160,5 +179,11 @@ export function setupTimeline({
     refreshSelectionHighlight: applySelectionHighlight,
     exitSelection: deselect,
     getSelectedLineId: () => selectedLineId,
+    setWordViewActiveGetter: (getter) => {
+      isWordViewActive = getter;
+    },
+    setExitWordView: (fn) => {
+      exitWordView = fn;
+    },
   };
 }
