@@ -47,7 +47,12 @@ export function setupPreview({ output, player, getProject }: PreviewOptions): Pr
     output.classList.toggle("preview-idle", !line);
 
     if (!line) {
-      output.textContent = "—";
+      // Marcador neutro (intro, silencio, hueco entre líneas): que no parezca un panel roto.
+      const marker = document.createElement("span");
+      marker.className = "preview-idle-marker";
+      marker.setAttribute("aria-hidden", "true");
+      marker.textContent = "♪";
+      output.append(marker);
       return;
     }
 

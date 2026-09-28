@@ -233,6 +233,14 @@ textarea {
   color: var(--muted);
 }
 
+/* Estado neutro: nota musical tenue y centrada (usa --muted, que ya tiene variante dark). */
+.preview-idle-marker {
+  color: var(--muted);
+  opacity: 0.6;
+  font-size: 2rem;
+  line-height: 1;
+}
+
 .preview-line-active,
 .preview-word-active {
   color: var(--accent);

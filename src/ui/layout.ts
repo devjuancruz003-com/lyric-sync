@@ -76,7 +76,7 @@ export function renderLayout(root: HTMLElement): AppElements {
 
       <section id="preview-panel" class="panel" aria-labelledby="preview-heading" hidden>
         <h2 id="preview-heading">Preview</h2>
-        <div id="preview-output" class="preview-output preview-idle" aria-live="off">—</div>
+        <div id="preview-output" class="preview-output preview-idle" aria-live="off"><span class="preview-idle-marker" aria-hidden="true">♪</span></div>
       </section>
 
       <section class="panel" aria-labelledby="lyrics-heading">
