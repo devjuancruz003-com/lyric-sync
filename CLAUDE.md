@@ -43,13 +43,34 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   marca el inicio de la línea actual en vez de pausar el audio (su función
   fuera de este modo). Escape sale del modo captura y le devuelve a espacio
   su función normal.
-- Cada tap de captura marca únicamente `startTime` de la línea; `endTime`
-  queda en `null` hasta la Fase 7.
-- Al entrar por primera vez al modo refinamiento, cada línea capturada recibe
-  un `endTime` automático: el `startTime` de la línea siguiente, o la
-  duración total del audio si es la última. Es un dato real del Project (no
-  solo visual) — empuja un `HistoryEntry` por línea, así se puede deshacer si
-  el resultado automático no sirve.
+- Al iniciar la captura de líneas, si la línea objetivo (la primera sin
+  `startTime`) tiene alguna línea capturada antes, se hace seek al `startTime`
+  de la más cercana anterior y se reproduce desde ahí (esté el audio pausado o
+  sonando), para tener el contexto de la letra ya sincronizada. Sin ninguna
+  capturada antes, no se toca la posición (como antes). La captura de palabras
+  no cambia: ya arranca en el `startTime` de su línea.
+- Cada tap de captura marca el `startTime` de la línea y deriva, en el MISMO
+  `HistoryEntry` "setTimestamp" (campo opcional `derived`, así un Ctrl+Z
+  deshace la marca y el `endTime` derivado de un solo paso): el `endTime` de
+  la línea anterior MÁS CERCANA por posición que tenga `startTime` (no
+  necesariamente la adyacente) se recorta al `startTime` de la recién marcada
+  si es `null` o mayor que ese `startTime` (así una captura reanudada corrige
+  el `endTime` provisional que dejó "Refinar timing"; el `before` guarda el
+  provisional para que Ctrl+Z lo restaure). Si es menor o igual (hueco
+  deliberado), o si el tap cae antes del inicio de esa línea, no se toca. Y el
+  `endTime` de la última línea del proyecto (= duración del audio, si es > 0).
+  Cargar un proyecto NO corrige solapamientos (`normalizeProject` no los toca):
+  los avisos de la Fase 8 son informativos y pueden ser a propósito. Así las
+  líneas ya tienen rango justo después de capturar, sin pasar por el
+  refinamiento — `getRenderableLines()` descarta las líneas sin `endTime`, y sin
+  esto el preview y "Seguir reproducción" no actuarían tras capturar. Una
+  captura parcial deja la última línea capturada en `null`.
+- "Refinar timing" (entrada al modo refinamiento) conserva
+  `deriveMissingEndTimes()` como red de seguridad: a cada línea capturada que
+  siga sin `endTime` le pone el `startTime` de la siguiente capturada, o la
+  duración del audio si es la última. Es un dato real del Project (no solo
+  visual) — empuja un `HistoryEntry` por línea. Con la derivación al capturar
+  casi nunca tiene algo que completar.
 - Nudging por teclado en el refinamiento, sin línea seleccionada las flechas
   siguen siendo el seek de ±5s (Fase 2): ←/→ ajustan en pasos de 100ms el
   borde activo (inicio o fin) de la línea seleccionada (click en su region o
@@ -79,9 +100,10 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   última de la línea (por posición) toma el `endTime` de la línea. No depende
   de que el audio llegue al final de la línea (ese chequeo solo pausa y sale de
   la captura). Una captura parcial deja la última palabra capturada en `null`.
-  `normalizeProject()` aplica la misma regla, en silencio (sin `HistoryEntry`,
-  ni en undo/redo), a proyectos ya guardados al cargar de localStorage y al
-  importar un `.json`.
+  `normalizeProject()` aplica la misma regla a líneas y palabras (primero las
+  líneas, porque el `endTime` de la última palabra depende del de su línea), en
+  silencio (sin `HistoryEntry`, ni en undo/redo), a proyectos ya guardados al
+  cargar de localStorage y al importar un `.json`.
 - Sin refinamiento manual (regions) para palabras — no está en el roadmap
   como fase separada, y agregar drag-and-resize a nivel palabra dentro de una
   línea angosta es demasiada UI para el plan actual. El undo cubre el caso de

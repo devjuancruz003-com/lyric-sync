@@ -2,10 +2,12 @@ import "./style.css";
 import { AudioPlayer } from "./audio/player";
 import { History } from "./core/history";
 import {
+  computeLineTap,
   computeWordTap,
   createProject,
   normalizeProject,
   type HistoryEntry,
+  type LineTimingPayload,
   type Project,
   type WordTimingPayload,
 } from "./core/project";
@@ -65,10 +67,7 @@ const tapSyncControls = setupTapSync({
   linesOutput: els.linesOutput,
   getLines: () => project?.lines ?? [],
   getLatencyOffsetMs: () => userSettings.latencyOffsetMs,
-  onTap: (lineId, startTime) => {
-    const currentEndTime = project?.lines.find((line) => line.id === lineId)?.endTime ?? null;
-    commitLineTiming(lineId, startTime, currentEndTime);
-  },
+  onTap: commitLineTap,
 });
 
 const timelineControls = setupTimeline({
@@ -179,20 +178,31 @@ function applyProject(next: Project | null): void {
   updatePreview();
 }
 
-/** Actualiza start/endTime de una sola línea sin tocar el resto (usado por la captura en
- * vivo, la derivación automática de endTime, el nudging y el arrastre de regions, y por
- * undo/redo de "setTimestamp") — no interrumpe una captura ni una selección en curso. */
-function setLineTimestamps(lineId: string, startTime: number | null, endTime: number | null): void {
+/** Actualiza start/endTime de una línea (usado por la captura en vivo, la derivación
+ * automática de endTime, el nudging y el arrastre de regions, y por undo/redo de "setTimestamp")
+ * — no interrumpe una captura ni una selección en curso. Además de la línea, aplica en el mismo
+ * paso los endTime derivados de otras líneas (`derived`), si los hay. */
+function setLineTimestamps({ lineId, startTime, endTime, derived = [] }: LineTimingPayload): void {
   if (!project) return;
+  const derivedEndTimes = new Map(derived.map((entry) => [entry.lineId, entry.endTime]));
   project = {
     ...project,
-    lines: project.lines.map((line) => (line.id === lineId ? { ...line, startTime, endTime } : line)),
+    lines: project.lines.map((line) => {
+      if (line.id === lineId) return { ...line, startTime, endTime };
+      return derivedEndTimes.has(line.id) ? { ...line, endTime: derivedEndTimes.get(line.id) ?? null } : line;
+    }),
   };
   renderLines(els.linesOutput, project.lines, project.syncMode);
   tapSyncControls.refreshHighlight();
   timelineControls.refreshSelectionHighlight();
   wordSyncControls.refresh();
   if (startTime !== null && endTime !== null) player.updateRegion(lineId, startTime, endTime);
+  for (const { lineId: derivedLineId } of derived) {
+    const line = project.lines.find((candidate) => candidate.id === derivedLineId);
+    if (line && line.startTime !== null && line.endTime !== null) {
+      player.updateRegion(derivedLineId, line.startTime, line.endTime);
+    }
+  }
   updateProjectButton();
   updateTimelineButton();
   previewControls.refresh();
@@ -212,7 +222,23 @@ function commitLineTiming(lineId: string, startTime: number | null, endTime: num
     after: { lineId, startTime, endTime },
     timestamp: Date.now(),
   });
-  setLineTimestamps(lineId, startTime, endTime);
+  setLineTimestamps({ lineId, startTime, endTime });
+}
+
+/** Empuja un HistoryEntry "setTimestamp" para el tap de captura en vivo: además de la marca,
+ * deriva el endTime de la línea anterior (o de la última, con la duración del audio) en el
+ * mismo entry, así un Ctrl+Z los deshace juntos y el preview/seguimiento ya pueden usar la
+ * línea sin pasar por "Refinar timing". */
+function commitLineTap(lineId: string, startTime: number): void {
+  if (!project) return;
+  const currentEndTime = project.lines.find((line) => line.id === lineId)?.endTime ?? null;
+  // La duración real del audio manda sobre project.duration (que queda en 0 si la letra se
+  // analizó antes de cargar el audio) — mismo criterio que getAudioDuration del timeline.
+  const duration = player.getDuration() || project.duration;
+  const change = computeLineTap(project.lines, duration, lineId, startTime, currentEndTime);
+  if (!change) return;
+  history.push({ type: "setTimestamp", before: change.before, after: change.after, timestamp: Date.now() });
+  setLineTimestamps(change.after);
 }
 
 /** Análogo a setLineTimestamps() pero para una palabra dentro de una línea (Fase 9) — no
@@ -303,12 +329,7 @@ els.syncModeSelect.addEventListener("change", () => {
 
 function applyHistoryEntry(entry: HistoryEntry, side: "before" | "after"): void {
   if (entry.type === "setTimestamp") {
-    const { lineId, startTime, endTime } = entry[side] as {
-      lineId: string;
-      startTime: number | null;
-      endTime: number | null;
-    };
-    setLineTimestamps(lineId, startTime, endTime);
+    setLineTimestamps(entry[side] as LineTimingPayload);
     return;
   }
 

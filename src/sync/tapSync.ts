@@ -10,6 +10,20 @@ export function findNextUncaptured<T extends { startTime: number | null }>(items
   return items.findIndex((item) => item.startTime === null);
 }
 
+/**
+ * Tiempo (segundos) desde el que conviene arrancar al reanudar la captura: el startTime de la
+ * línea capturada más cercana ANTERIOR a la objetivo (`targetIndex`), para dar el contexto de
+ * la letra ya sincronizada antes de marcar la que sigue. `null` si no hay ninguna capturada
+ * antes (primera captura, o la objetivo es la primera línea).
+ */
+export function findResumeTime(lines: Line[], targetIndex: number): number | null {
+  for (let index = targetIndex - 1; index >= 0; index--) {
+    const startTime = lines[index].startTime;
+    if (startTime !== null) return startTime;
+  }
+  return null;
+}
+
 export interface TapResult {
   lineId: string;
   startTime: number;

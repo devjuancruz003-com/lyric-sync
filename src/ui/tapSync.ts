@@ -1,6 +1,6 @@
 import type { AudioPlayer } from "../audio/player";
 import type { Line } from "../core/project";
-import { TapSyncSession } from "../sync/tapSync";
+import { findResumeTime, TapSyncSession } from "../sync/tapSync";
 import { setTargetLine } from "./linesPreview";
 
 /** Clase en <body> mientras la captura está activa, para que otros listeners globales
@@ -81,7 +81,8 @@ export function setupTapSync({
   function startCapture(): void {
     // La captura de palabras (Fase 9) usa la misma clase; no arrancar las dos a la vez.
     if (session || document.body.classList.contains(CAPTURE_ACTIVE_CLASS)) return;
-    const newSession = new TapSyncSession(getLines());
+    const lines = getLines();
+    const newSession = new TapSyncSession(lines);
     if (newSession.isDone()) return; // no queda ninguna línea por marcar
 
     session = newSession;
@@ -92,6 +93,10 @@ export function setupTapSync({
     startButton.blur();
     highlightCurrent();
 
+    // Al reanudar, arrancar desde la última línea ya capturada (suene o no el audio) para tener
+    // el contexto de la letra sincronizada; sin ninguna capturada antes, no se toca la posición.
+    const resumeTime = findResumeTime(lines, newSession.getCurrentIndex());
+    if (resumeTime !== null) player.seek(resumeTime);
     if (!player.isPlaying()) player.play().catch(() => {});
   }
 
