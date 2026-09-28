@@ -139,6 +139,16 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   iniciar, se abre en "Sincronizar" si el proyecto restaurado tiene líneas. Las
   pestañas siguen el patrón ARIA tabs; ←/→ navegan entre ellas solo con el foco
   en una pestaña.
+- La lista de líneas resalta la línea que suena (`.playing-line` +
+  `aria-current="true"`, tinte de fondo teal + marcador ▶), en paralelo al
+  preview y con la misma fuente (`getRenderableLines`/`getActiveState`, resuelta
+  una sola vez en `src/ui/playingLine.ts` y compartida con "Seguir
+  reproducción"). Es un estado aparte de los tres existentes (`.target-line`,
+  `.selected-line`, `.line-warning`), sin outline ni border-left, y NO depende
+  de la casilla (que solo controla el scroll). Se actualiza solo cuando cambia
+  la línea, se reaplica tras cada re-render de la lista y no queda ninguna
+  resaltada en intro/huecos. Si coincide con el objetivo de captura, gana el
+  amarillo del objetivo y el ▶ sigue visible.
 - "Seguir reproducción" (casilla, activada por defecto): la lista scrollea su
   propio contenedor (no `scrollIntoView`, que movería la página), sin
   animación y solo cuando cambia la línea objetivo de captura o la línea que

@@ -37,6 +37,7 @@ import { setupTimeline } from "./ui/timeline";
 import { setupWordSync } from "./ui/wordSync";
 import { setupPreview } from "./ui/preview";
 import { setupFollowPlayback } from "./ui/followPlayback";
+import { setupPlayingLine } from "./ui/playingLine";
 import { setupTabs } from "./ui/tabs";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -98,12 +99,13 @@ const previewControls = setupPreview({
   getProject: () => project,
 });
 
+const playingLine = setupPlayingLine({ list: els.linesOutput, player, getProject: () => project });
+
 const followControls = setupFollowPlayback({
   scroller: els.linesScroll,
   list: els.linesOutput,
   checkbox: els.followCheckbox,
-  player,
-  getProject: () => project,
+  playingLine,
 });
 
 const tabs = setupTabs({

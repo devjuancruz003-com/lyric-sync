@@ -1,14 +1,12 @@
-import type { AudioPlayer } from "../audio/player";
-import type { Project } from "../core/project";
-import { getActiveState, getRenderableLines } from "../render/highlighter";
+import type { PlayingLineControls } from "./playingLine";
 
 export interface FollowPlaybackOptions {
   /** Contenedor con scroll propio (overflow-y: auto) que envuelve la lista de líneas. */
   scroller: HTMLElement;
   list: HTMLElement;
   checkbox: HTMLInputElement;
-  player: AudioPlayer;
-  getProject: () => Project | null;
+  /** La línea que suena (fuente compartida con el resaltado de la lista). */
+  playingLine: PlayingLineControls;
 }
 
 export interface FollowPlaybackControls {
@@ -29,10 +27,8 @@ export function setupFollowPlayback({
   scroller,
   list,
   checkbox,
-  player,
-  getProject,
+  playingLine,
 }: FollowPlaybackOptions): FollowPlaybackControls {
-  let lastPlayingLineId: string | null = null;
   let lastTargetLineId: string | null = null;
 
   function findLine(lineId: string): HTMLElement | null {
@@ -56,18 +52,9 @@ export function setupFollowPlayback({
     scroller.scrollTop += item.top - box.top - (box.height - item.height) / 2;
   }
 
-  function getPlayingLineId(currentTimeSec: number): string | null {
-    const project = getProject();
-    const lines = project ? getRenderableLines(project) : [];
-    const { lineIndex } = getActiveState(lines, currentTimeSec);
-    return lineIndex >= 0 ? lines[lineIndex].id : null;
-  }
-
-  // La línea que suena: solo al cambiar, y no durante una captura (ahí manda la línea objetivo).
-  player.onTimeUpdate((currentTimeSec) => {
-    const lineId = getPlayingLineId(currentTimeSec);
-    if (lineId === lastPlayingLineId) return;
-    lastPlayingLineId = lineId;
+  // La línea que suena (la resuelve ui/playingLine.ts, con la misma fuente que el preview): solo
+  // al cambiar, y no durante una captura (ahí manda la línea objetivo).
+  playingLine.onChange((lineId) => {
     if (!lineId || !checkbox.checked || document.body.classList.contains(CAPTURE_ACTIVE_CLASS)) return;
     const li = findLine(lineId);
     if (li) reveal(li);
@@ -91,7 +78,7 @@ export function setupFollowPlayback({
       reveal(target);
       return;
     }
-    const lineId = getPlayingLineId(player.getCurrentTime());
+    const lineId = playingLine.getId();
     const li = lineId ? findLine(lineId) : null;
     if (li) reveal(li);
   }

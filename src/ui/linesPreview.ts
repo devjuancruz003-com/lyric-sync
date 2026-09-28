@@ -65,6 +65,14 @@ export function renderLines(container: HTMLElement, lines: Line[], syncMode: Pro
     const li = document.createElement("li");
     li.dataset.lineId = line.id;
 
+    // Marcador de "línea que suena" (ui/playingLine.ts): reservado en TODAS las líneas (oculto
+    // hasta que la <li> lleva .playing-line) para que resaltar una no corra el texto.
+    const playingMarker = document.createElement("span");
+    playingMarker.className = "playing-marker";
+    playingMarker.setAttribute("aria-hidden", "true");
+    playingMarker.textContent = "▶";
+    li.appendChild(playingMarker);
+
     const warnings = warningsByLine.get(line.id);
     if (warnings) {
       li.classList.add("line-warning");

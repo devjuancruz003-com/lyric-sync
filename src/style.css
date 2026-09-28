@@ -9,6 +9,8 @@
   --accent: #5b6cff;
   --highlight: #fff3b0;
   --warning: #d1495b;
+  --playing: #0b7f70;
+  --playing-bg: #d9f1ed;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +22,8 @@
     --muted: #9a9fb2;
     --highlight: #4a4020;
     --warning: #ff8095;
+    --playing: #4fd1c0;
+    --playing-bg: #1a3a3a;
   }
 }
 
@@ -338,6 +342,26 @@ textarea {
 .lines-output .line-timestamp {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Línea que suena (ui/playingLine.ts): tinte de fondo + marcador ▶, sin outline ni border-left
+ * (esos son de la selección, el objetivo de captura y el aviso de timing). Va ANTES de
+ * .target-line a propósito: su "background" pisa este tinte cuando coinciden y el objetivo de
+ * captura conserva la prioridad visual, mientras el ▶ sigue mostrando que también suena. */
+.lines-output li.playing-line {
+  background-color: var(--playing-bg);
+}
+
+.playing-marker {
+  display: inline-block;
+  width: 1.3em;
+  color: var(--playing);
+  font-size: 0.75em;
+  visibility: hidden;
+}
+
+.lines-output li.playing-line .playing-marker {
+  visibility: visible;
 }
 
 .lines-output li.target-line {
