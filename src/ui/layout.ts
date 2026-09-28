@@ -7,11 +7,14 @@ export interface AppElements {
   zoomInButton: HTMLButtonElement;
   zoomOutButton: HTMLButtonElement;
   timeDisplay: HTMLElement;
+  previewPanel: HTMLElement;
+  previewOutput: HTMLElement;
   lyricsInput: HTMLTextAreaElement;
   analyzeButton: HTMLButtonElement;
   tapSyncButton: HTMLButtonElement;
   refineButton: HTMLButtonElement;
   refineStatus: HTMLElement;
+  syncModeSelect: HTMLSelectElement;
   linesOutput: HTMLElement;
   exportButton: HTMLButtonElement;
   importInput: HTMLInputElement;
@@ -71,6 +74,11 @@ export function renderLayout(root: HTMLElement): AppElements {
         </div>
       </section>
 
+      <section id="preview-panel" class="panel" aria-labelledby="preview-heading" hidden>
+        <h2 id="preview-heading">Preview</h2>
+        <div id="preview-output" class="preview-output preview-idle" aria-live="off">—</div>
+      </section>
+
       <section class="panel" aria-labelledby="lyrics-heading">
         <h2 id="lyrics-heading">Letra</h2>
         <label class="lyrics-field">
@@ -81,6 +89,13 @@ export function renderLayout(root: HTMLElement): AppElements {
           <button id="analyze-button" type="button" disabled>Analizar letra</button>
           <button id="tap-sync-button" type="button" disabled>Iniciar captura</button>
           <button id="refine-button" type="button" disabled>Refinar timing</button>
+          <label class="sync-mode-field">
+            Modo
+            <select id="sync-mode-select" disabled>
+              <option value="line">Línea</option>
+              <option value="word">Palabra</option>
+            </select>
+          </label>
         </div>
         <p id="refine-status" class="status" role="status" aria-live="polite"></p>
 
@@ -116,11 +131,14 @@ export function renderLayout(root: HTMLElement): AppElements {
     zoomInButton: get("zoom-in-button"),
     zoomOutButton: get("zoom-out-button"),
     timeDisplay: get("time-display"),
+    previewPanel: get("preview-panel"),
+    previewOutput: get("preview-output"),
     lyricsInput: get("lyrics-input"),
     analyzeButton: get("analyze-button"),
     tapSyncButton: get("tap-sync-button"),
     refineButton: get("refine-button"),
     refineStatus: get("refine-status"),
+    syncModeSelect: get("sync-mode-select"),
     linesOutput: get("lines-output"),
     exportButton: get("export-button"),
     importInput: get("import-input"),

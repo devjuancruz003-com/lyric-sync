@@ -154,6 +154,12 @@ textarea {
   font: inherit;
 }
 
+.sync-mode-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .lines-output {
   margin: 16px 0 0;
   padding-left: 28px;
@@ -197,6 +203,60 @@ textarea {
 .lines-output li.line-warning {
   border-left: 3px solid var(--warning);
   padding-left: 5px;
+}
+
+/* Palabra objetivo de captura de palabras (Fase 9) — mismo lenguaje visual que
+ * .target-line (fondo + outline), pero sobre el <span> de la palabra en vez de la línea. */
+.word.target-word {
+  background: var(--highlight);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* Preview en vivo (Fase 10): lo que se vería en el video final. Altura mínima fija para que
+ * el panel no salte al alternar entre línea activa y estado neutro. */
+.preview-output {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0 0.3em;
+  min-height: 4.5rem;
+  padding: 16px;
+  font-size: 1.6rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.preview-output.preview-idle {
+  color: var(--muted);
+}
+
+.preview-line-active,
+.preview-word-active {
+  color: var(--accent);
+}
+
+.preview-word {
+  transition: color 0.08s linear, opacity 0.08s linear;
+}
+
+.preview-word-sung {
+  color: var(--text);
+  opacity: 0.55;
+}
+
+.preview-word-upcoming {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.capture-words-button {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 0.85em;
 }
 
 .line-warning-icon {

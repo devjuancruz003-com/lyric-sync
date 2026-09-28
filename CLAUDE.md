@@ -30,7 +30,7 @@ interface Project { audioFileName: string; duration: number; syncMode: "line" | 
 interface Line { id: string; text: string; startTime: number | null; endTime: number | null; words: Word[]; }
 interface Word { id: string; text: string; startTime: number | null; endTime: number | null; }
 interface UserSettings { latencyOffsetMs: number; }
-interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject"; before: unknown; after: unknown; timestamp: number; }
+interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "editText" | "shiftOffset" | "createProject" | "setSyncMode" | "setWordTimestamp"; before: unknown; after: unknown; timestamp: number; }
 ```
 
 ## Decisiones de UX (no cambiar sin avisar)
@@ -64,8 +64,46 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   Netflix — acá son versos cantados, donde una palabra suelta en un tramo
   rápido puede durar 150-200ms legítimamente). El piso de 300ms es para
   atrapar mistaps evidentes de captura, no para exigir ritmo de lectura.
+- El modo palabra (Fase 9) no es un sistema paralelo: reutiliza la mecánica
+  de captura de las Fases 6-7 pero anidada. Para capturar las palabras de una
+  línea, esa línea ya debe tener su propio `startTime`/`endTime`. La captura
+  reproduce solo ese tramo acotado (no la canción entera), con el mismo
+  tap-to-sync con offset calibrado y la misma fórmula de derivación de
+  `endTime`, aplicadas a `Word[]` dentro de la línea en vez de a `Line[]`
+  dentro de toda la canción.
+- Derivación de `endTime` de palabras, incremental: cada vez que se marca una
+  palabra, en el mismo `HistoryEntry` "setWordTimestamp" (el payload lleva un
+  `derived` opcional con los endTime de otras palabras, así un Ctrl+Z deshace
+  la marca y las derivaciones de un solo paso): la palabra anterior sin
+  `endTime` toma el `startTime` de la recién marcada, y si la marcada es la
+  última de la línea (por posición) toma el `endTime` de la línea. No depende
+  de que el audio llegue al final de la línea (ese chequeo solo pausa y sale de
+  la captura). Una captura parcial deja la última palabra capturada en `null`.
+  `normalizeProject()` aplica la misma regla, en silencio (sin `HistoryEntry`,
+  ni en undo/redo), a proyectos ya guardados al cargar de localStorage y al
+  importar un `.json`.
+- Sin refinamiento manual (regions) para palabras — no está en el roadmap
+  como fase separada, y agregar drag-and-resize a nivel palabra dentro de una
+  línea angosta es demasiada UI para el plan actual. El undo cubre el caso de
+  "salió mal": se rehace la captura de esa línea entera. Ajuste fino por
+  palabra, si hace falta, sería una fase aparte.
 - El preview usa el mismo motor de renderizado (`src/render/highlighter.ts`)
-  que los exportadores — nunca una implementación aparte.
+  que los exportadores — nunca una implementación aparte. Ese módulo separa
+  dos responsabilidades: `getRenderableLines(project)` filtra qué líneas y
+  palabras tienen timing completo y son seguras de mostrar/exportar (solo
+  líneas con `startTime` y `endTime`; `words` va completo solo si todas las
+  palabras tienen timing, si no la línea entra con `words: []` y cae a
+  resaltado de línea completa). La usan el preview y, en la Fase 11, los
+  exportadores, así lo que se ve y lo que se exporta no pueden divergir.
+  `getActiveState(lines, currentTime)` decide qué línea/palabra suena ahora:
+  es solo para el preview en vivo, los exportadores no la usan (escriben
+  rangos, no les importa el tiempo de reproducción). Ninguna de las dos se
+  guarda en el Project; se recalculan en cada tick (y al cambiar el Project,
+  para que el preview no quede desactualizado con el audio en pausa).
+- El preview (`src/ui/preview.ts`) es un panel aparte de la lista de líneas
+  (`linesPreview.ts`, que sigue siendo la vista de edición): sin botones, se
+  actualiza solo mientras suena el audio y es visible siempre que haya un
+  Project con audio cargado, no solo durante la captura.
 - Toda la app debe ser operable por teclado (sin depender del mouse).
 - Autosave a `localStorage` en cada cambio + warning nativo del navegador
   (`beforeunload`) si hay cambios sin exportar, porque no hay cuenta ni nube.
@@ -80,3 +118,5 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [x] Fase 6 — Captura en vivo (tap-to-sync) a nivel línea. Completo.
 - [x] Fase 7 — Refinamiento manual (regions en waveform + nudging por teclado). Completo.
 - [x] Fase 8 — Validación de timing (avisos no bloqueantes). Completo.
+- [x] Fase 9 — Modo palabra por palabra. Completo.
+- [ ] Fase 10 — Preview en tiempo real (motor `src/render/highlighter.ts` compartido). Implementada, provisional hasta verificar el preview en modo palabra en el navegador.

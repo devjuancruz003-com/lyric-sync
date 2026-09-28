@@ -1,8 +1,13 @@
 import type { Line } from "../core/project";
 
-/** Índice de la primera Line sin startTime, o -1 si todas ya lo tienen. */
-export function findNextUncapturedLine(lines: Line[]): number {
-  return lines.findIndex((line) => line.startTime === null);
+/**
+ * Índice del primer item sin startTime, o -1 si todos ya lo tienen. Genérico
+ * para poder usarse tanto con Line[] (captura de líneas, Fase 6) como con
+ * Word[] (captura de palabras dentro de una línea, Fase 9) — mismo patrón de
+ * generalización que ya se usó con commitLineTiming en la Fase 7.
+ */
+export function findNextUncaptured<T extends { startTime: number | null }>(items: T[]): number {
+  return items.findIndex((item) => item.startTime === null);
 }
 
 export interface TapResult {
@@ -21,7 +26,7 @@ export class TapSyncSession {
   private currentIndex: number;
 
   constructor(lines: Line[]) {
-    this.currentIndex = findNextUncapturedLine(lines);
+    this.currentIndex = findNextUncaptured(lines);
   }
 
   /** Índice de la línea objetivo actual, o -1 si no queda ninguna por marcar. */
@@ -46,7 +51,7 @@ export class TapSyncSession {
     const startTime = Math.max(0, audioCurrentTime - latencyOffsetMs / 1000);
 
     const remaining = lines.slice(this.currentIndex + 1);
-    const nextOffset = findNextUncapturedLine(remaining);
+    const nextOffset = findNextUncaptured(remaining);
     this.currentIndex = nextOffset === -1 ? -1 : this.currentIndex + 1 + nextOffset;
 
     return { lineId: line.id, startTime };

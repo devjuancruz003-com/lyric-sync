@@ -79,7 +79,8 @@ export function setupTapSync({
   }
 
   function startCapture(): void {
-    if (session) return;
+    // La captura de palabras (Fase 9) usa la misma clase; no arrancar las dos a la vez.
+    if (session || document.body.classList.contains(CAPTURE_ACTIVE_CLASS)) return;
     const newSession = new TapSyncSession(getLines());
     if (newSession.isDone()) return; // no queda ninguna línea por marcar
 

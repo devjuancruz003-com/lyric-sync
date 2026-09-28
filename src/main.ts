@@ -1,7 +1,14 @@
 import "./style.css";
 import { AudioPlayer } from "./audio/player";
 import { History } from "./core/history";
-import { createProject, type HistoryEntry, type Project } from "./core/project";
+import {
+  computeWordTap,
+  createProject,
+  normalizeProject,
+  type HistoryEntry,
+  type Project,
+  type WordTimingPayload,
+} from "./core/project";
 import { parseLyrics } from "./core/parser";
 import {
   dismissCalibrationSuggestion,
@@ -25,6 +32,8 @@ import { renderLines } from "./ui/linesPreview";
 import { calibrationButtonLabel, openCalibrationModal } from "./ui/calibration";
 import { setupTapSync } from "./ui/tapSync";
 import { setupTimeline } from "./ui/timeline";
+import { setupWordSync } from "./ui/wordSync";
+import { setupPreview } from "./ui/preview";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -70,6 +79,30 @@ const timelineControls = setupTimeline({
   onLineTimingChange: commitLineTiming,
 });
 
+const wordSyncControls = setupWordSync({
+  linesOutput: els.linesOutput,
+  player,
+  getLines: () => project?.lines ?? [],
+  getLatencyOffsetMs: () => userSettings.latencyOffsetMs,
+  onWordTap: (lineId, wordId, startTime) => {
+    const currentEndTime =
+      project?.lines.find((line) => line.id === lineId)?.words.find((word) => word.id === wordId)?.endTime ?? null;
+    commitWordTiming(lineId, wordId, startTime, currentEndTime);
+  },
+});
+
+const previewControls = setupPreview({
+  output: els.previewOutput,
+  player,
+  getProject: () => project,
+});
+
+/** El preview aplica siempre que haya un Project con audio cargado (no solo durante captura). */
+function updatePreview(): void {
+  els.previewPanel.hidden = !(project && loadedAudio);
+  previewControls.refresh();
+}
+
 function updateTapSyncButton(): void {
   tapSyncControls.setEnabled(!!project && project.lines.length > 0 && !!loadedAudio);
 }
@@ -87,6 +120,7 @@ setupAudioLoader({
     controls.setEnabled(true);
     loadedAudio = { fileName: file.name, duration };
     updateTapSyncButton();
+    updatePreview();
     // Las regions creadas antes de cargar audio (ej. al restaurar un proyecto) quedan
     // registradas pero wavesurfer.js no siempre las inserta en el DOM cuando el audio
     // termina de cargar después — re-renderizarlas acá, ya con audio real, es confiable.
@@ -108,12 +142,15 @@ function updateProjectButton(): void {
 function applyProject(next: Project | null): void {
   tapSyncControls.exitCapture();
   timelineControls.exitSelection();
+  wordSyncControls.exitCapture();
   project = next;
-  renderLines(els.linesOutput, project?.lines ?? []);
+  renderLines(els.linesOutput, project?.lines ?? [], project?.syncMode ?? "line");
   player.renderLineRegions(project?.lines ?? []);
   updateProjectButton();
   updateTapSyncButton();
   updateTimelineButton();
+  updateSyncModeSelect();
+  updatePreview();
 }
 
 /** Actualiza start/endTime de una sola línea sin tocar el resto (usado por la captura en
@@ -125,12 +162,14 @@ function setLineTimestamps(lineId: string, startTime: number | null, endTime: nu
     ...project,
     lines: project.lines.map((line) => (line.id === lineId ? { ...line, startTime, endTime } : line)),
   };
-  renderLines(els.linesOutput, project.lines);
+  renderLines(els.linesOutput, project.lines, project.syncMode);
   tapSyncControls.refreshHighlight();
   timelineControls.refreshSelectionHighlight();
+  wordSyncControls.refresh();
   if (startTime !== null && endTime !== null) player.updateRegion(lineId, startTime, endTime);
   updateProjectButton();
   updateTimelineButton();
+  previewControls.refresh();
   saveProject(project);
   markUnsaved();
 }
@@ -148,6 +187,62 @@ function commitLineTiming(lineId: string, startTime: number | null, endTime: num
     timestamp: Date.now(),
   });
   setLineTimestamps(lineId, startTime, endTime);
+}
+
+/** Análogo a setLineTimestamps() pero para una palabra dentro de una línea (Fase 9) — no
+ * toca el timing de la línea misma. Además de la palabra, aplica en el mismo paso los endTime
+ * derivados de otras palabras (`derived`), si los hay. */
+function setWordTimestamps({ lineId, wordId, startTime, endTime, derived = [] }: WordTimingPayload): void {
+  if (!project) return;
+  const derivedEndTimes = new Map(derived.map((entry) => [entry.wordId, entry.endTime]));
+  project = {
+    ...project,
+    lines: project.lines.map((line) =>
+      line.id !== lineId
+        ? line
+        : {
+            ...line,
+            words: line.words.map((word) => {
+              if (word.id === wordId) return { ...word, startTime, endTime };
+              return derivedEndTimes.has(word.id) ? { ...word, endTime: derivedEndTimes.get(word.id) ?? null } : word;
+            }),
+          },
+    ),
+  };
+  renderLines(els.linesOutput, project.lines, project.syncMode);
+  wordSyncControls.refresh();
+  previewControls.refresh();
+  saveProject(project);
+  markUnsaved();
+}
+
+/** Empuja un HistoryEntry "setWordTimestamp" para una palabra y aplica el cambio — usado por
+ * el tap en vivo de palabras. Los endTime derivados (la palabra anterior, o la última de la
+ * línea) viajan en el mismo entry, así un Ctrl+Z los deshace junto con la marca. */
+function commitWordTiming(lineId: string, wordId: string, startTime: number | null, endTime: number | null): void {
+  const line = project?.lines.find((candidate) => candidate.id === lineId);
+  if (!line) return;
+  const change = computeWordTap(line, wordId, startTime, endTime);
+  if (!change) return;
+  history.push({ type: "setWordTimestamp", before: change.before, after: change.after, timestamp: Date.now() });
+  setWordTimestamps(change.after);
+}
+
+function updateSyncModeSelect(): void {
+  els.syncModeSelect.disabled = !project;
+  els.syncModeSelect.value = project?.syncMode ?? "line";
+}
+
+/** Cambia Project.syncMode y re-renderiza (los botones "Capturar palabras" por línea solo
+ * aparecen en modo "word"). Sale de cualquier captura de palabras en curso. */
+function setSyncMode(mode: Project["syncMode"]): void {
+  if (!project) return;
+  wordSyncControls.exitCapture();
+  project = { ...project, syncMode: mode };
+  renderLines(els.linesOutput, project.lines, project.syncMode);
+  updateSyncModeSelect();
+  saveProject(project);
+  markUnsaved();
 }
 
 const lyricsControls = setupLyricsInput({
@@ -168,6 +263,15 @@ const lyricsControls = setupLyricsInput({
   },
 });
 
+els.syncModeSelect.addEventListener("change", () => {
+  if (!project) return;
+  const after = els.syncModeSelect.value as Project["syncMode"];
+  const before = project.syncMode;
+  if (before === after) return;
+  history.push({ type: "setSyncMode", before, after, timestamp: Date.now() });
+  setSyncMode(after);
+});
+
 // --- Undo/redo ---
 
 function applyHistoryEntry(entry: HistoryEntry, side: "before" | "after"): void {
@@ -178,6 +282,16 @@ function applyHistoryEntry(entry: HistoryEntry, side: "before" | "after"): void 
       endTime: number | null;
     };
     setLineTimestamps(lineId, startTime, endTime);
+    return;
+  }
+
+  if (entry.type === "setWordTimestamp") {
+    setWordTimestamps(entry[side] as WordTimingPayload);
+    return;
+  }
+
+  if (entry.type === "setSyncMode") {
+    setSyncMode(entry[side] as Project["syncMode"]);
     return;
   }
 
@@ -224,7 +338,7 @@ els.importInput.addEventListener("change", async () => {
   if (!file) return;
 
   try {
-    const imported = await importProject(file);
+    const imported = normalizeProject(await importProject(file));
     const before = project;
     history.push({ type: "createProject", before, after: imported, timestamp: Date.now() });
     applyProject(imported);
@@ -241,8 +355,12 @@ els.importInput.addEventListener("change", async () => {
 
 // --- Restaurar autosave al iniciar ---
 
-const restored = loadProject();
+const stored = loadProject();
+const restored = stored && normalizeProject(stored);
 if (restored) {
+  // Corrección silenciosa de datos (sin HistoryEntry ni markUnsaved): se persiste el resultado
+  // solo si cambió algo, para no tocar lastModified en cada carga.
+  if (restored !== stored) saveProject(restored);
   applyProject(restored);
   lyricsControls.setText(restored.lines.map((line) => line.text).join("\n"));
   els.audioStatus.textContent =

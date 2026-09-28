@@ -1,4 +1,4 @@
-import type { Line } from "../core/project";
+import type { Line, Project } from "../core/project";
 import { type LineWarning, validateLines } from "../core/validation";
 import { formatTime } from "./format";
 
@@ -12,15 +12,52 @@ function groupWarningsByLine(warnings: LineWarning[]): Map<string, LineWarning[]
   return byLine;
 }
 
+/** Label/disabled de "Capturar palabras" puramente derivados del propio Line (rango propio +
+ * progreso). El override a "Detener captura" mientras hay una sesión activa lo aplica
+ * ui/wordSync.ts después de cada render, vía su refresh(). */
+function applyCaptureButtonState(button: HTMLButtonElement, line: Line): void {
+  const hasOwnRange = line.startTime !== null && line.endTime !== null;
+  const total = line.words.length;
+  const captured = line.words.filter((word) => word.startTime !== null).length;
+
+  button.disabled = !hasOwnRange || (total > 0 && captured === total);
+  button.textContent =
+    !hasOwnRange || captured === 0
+      ? "Capturar palabras"
+      : captured === total
+        ? `Palabras: ${captured}/${total} ✓`
+        : `Palabras: ${captured}/${total}`;
+}
+
+function createCaptureWordsButton(line: Line): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "capture-words-button";
+  button.dataset.lineId = line.id;
+  applyCaptureButtonState(button, line);
+  return button;
+}
+
+/**
+ * Recalcula el label/disabled del botón "Capturar palabras" de `line` a partir de sus datos
+ * actuales, sin re-renderizar toda la lista. Se usa al salir del modo captura (completó el
+ * tramo o Escape), para sacar el "Detener captura" que queda pisado mientras estuvo activo.
+ */
+export function refreshCaptureButton(container: HTMLElement, line: Line): void {
+  const button = container.querySelector<HTMLButtonElement>(`.capture-words-button[data-line-id="${line.id}"]`);
+  if (button) applyCaptureButtonState(button, line);
+}
+
 /**
  * Renderiza las líneas analizadas como <li>, cada palabra en su propio <span>.
  * Nodos separados por palabra porque el motor de resaltado (Fase 5+) necesita
  * poder marcar cada uno individualmente. Las líneas con startTime muestran su
  * timestamp junto al texto; con endTime también, muestran el rango completo
  * (ej. "[0:12.4–0:15.1] Primera línea"). Valida el timing en cada llamada
- * (Fase 8) — los avisos son derivados, nunca se guardan.
+ * (Fase 8) — los avisos son derivados, nunca se guardan. En modo "word"
+ * (Fase 9), cada línea agrega su botón "Capturar palabras".
  */
-export function renderLines(container: HTMLElement, lines: Line[]): void {
+export function renderLines(container: HTMLElement, lines: Line[], syncMode: Project["syncMode"]): void {
   container.innerHTML = "";
   const warningsByLine = groupWarningsByLine(validateLines(lines));
 
@@ -65,6 +102,11 @@ export function renderLines(container: HTMLElement, lines: Line[]): void {
       if (index < line.words.length - 1) li.appendChild(document.createTextNode(" "));
     });
 
+    if (syncMode === "word") {
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(createCaptureWordsButton(line));
+    }
+
     container.appendChild(li);
   }
 }
@@ -89,5 +131,16 @@ export function setTargetLine(container: HTMLElement, lineId: string | null): vo
 export function setSelectedLine(container: HTMLElement, lineId: string | null): void {
   for (const li of container.querySelectorAll<HTMLLIElement>("li")) {
     li.classList.toggle("selected-line", li.dataset.lineId === lineId);
+  }
+}
+
+/**
+ * Resalta el <span class="word"> de `wordId` como palabra objetivo de captura
+ * de palabras (Fase 9); `null` quita el resaltado de todas. Los ids de word
+ * son únicos en todo el proyecto, así que no hace falta acotar por línea.
+ */
+export function setTargetWord(container: HTMLElement, wordId: string | null): void {
+  for (const span of container.querySelectorAll<HTMLSpanElement>(".word")) {
+    span.classList.toggle("target-word", span.dataset.wordId === wordId);
   }
 }
