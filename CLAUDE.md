@@ -185,6 +185,29 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
   propio contenedor (no `scrollIntoView`, que movería la página), sin
   animación y solo cuando cambia la línea objetivo de captura o la línea que
   suena; durante la captura manda la línea objetivo.
+- Regions de la waveform y chips de la lista (Fase 10d-1): cada línea tiene un
+  color fijo, `paleta[(posición de la línea en `project.lines`) % 6]` —
+  TODAS las líneas, no solo las capturadas, así el color de una línea no
+  cambia mientras se capturan o refinan las demás; con módulo 6 dos líneas
+  consecutivas nunca comparten color. Única fuente de la regla:
+  `src/core/lineColors.ts`, que usan tanto `src/audio/player.ts` (regions)
+  como `src/ui/regionChips.ts` (chip de la lista), así siempre combinan. La
+  region muestra el número de línea (1-based, igual al de la lista) dentro
+  de un fondo oscuro fijo (no la paleta) para leerse sobre cualquier color y
+  tema — el color nunca es la única forma de identificar la línea; se
+  recorta sin desbordar si la region es angosta. El chip junto al número de
+  la lista aparece solo mientras esa línea tiene region dibujada en la
+  waveform — en esta app eso no es un modo persistente con su propio
+  interruptor: pasa al cargar/importar un proyecto ya con timing, o recién
+  después de apretar "Refinar timing" (antes, la captura en vivo por sí sola
+  no dibuja regions). La region seleccionada se distingue con un outline más
+  marcado (3px) sobre cualquier color.
+  **Nota de implementación:** wavesurfer.js v8 renderiza las regions dentro
+  de un shadow root propio — una hoja de estilos externa no puede alcanzarlas
+  con selectores de clase o `[part]` (solo las custom properties, por eso el
+  color de fondo se pasa como `var(--region-N)"` y sí cruza el shadow
+  boundary); el número y su recorte (`overflow: hidden`) se aplican en línea
+  desde `player.ts`, no por CSS.
 - Toda la app debe ser operable por teclado (sin depender del mouse).
 - Autosave a `localStorage` en cada cambio + warning nativo del navegador
   (`beforeunload`) si hay cambios sin exportar, porque no hay cuenta ni nube.
@@ -203,5 +226,8 @@ interface HistoryEntry { type: "setTimestamp" | "addLine" | "deleteLine" | "edit
 - [ ] Fase 10 — Preview en tiempo real (motor `src/render/highlighter.ts` compartido). Provisional: pendiente verificar el preview en modo palabra.
 - [x] Fase 10b — Layout tipo editor (región de audio persistente + pestañas Preparar/Sincronizar). Completo.
 - [x] Fase 10c — Re-grabar palabras por línea + panel de línea seleccionada (pre-roll de 2s). Completo.
+- [x] Fase 10d-1 — Números y colores en regions de líneas + chips en la lista. Completo.
+- [ ] Fase 10d-2 — Refinamiento manual por palabra.
+- [ ] Fase 10d-3 — Acople línea→palabras (mover/ajustar la línea repercute en sus palabras).
 - [ ] Fase 11 — Exportadores (`.lrc`, `.srt`, `.vtt`, `.ass`) sobre `getRenderableLines()`, con pestaña "Exportar".
 - [ ] Fase 12 — Accesibilidad + pulido del flujo (las pestañas ya existen desde la 10b).

@@ -11,6 +11,17 @@
   --warning: #d1495b;
   --playing: #0b7f70;
   --playing-bg: #d9f1ed;
+  /* Paleta de líneas (Fase 10d-1): 6 tonos para las regions de la waveform y su chip en la
+   * lista. Elegidos para no compartir matiz con el azul de selección/objetivo activo (--accent),
+   * el amarillo del objetivo de captura (--highlight), el rojo de los avisos (--warning) ni el
+   * verde-azulado de "línea que suena" (--playing) — y para distinguirse del fondo grisáceo de
+   * la waveform y de su progreso (también azul). Semitransparentes para no tapar la onda. */
+  --region-1: rgba(214, 118, 33, 0.38); /* naranja */
+  --region-2: rgba(126, 149, 40, 0.38); /* oliva */
+  --region-3: rgba(36, 148, 105, 0.38); /* verde */
+  --region-4: rgba(139, 90, 209, 0.38); /* violeta */
+  --region-5: rgba(191, 68, 130, 0.38); /* magenta */
+  --region-6: rgba(176, 135, 38, 0.38); /* mostaza */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,6 +35,14 @@
     --warning: #ff8095;
     --playing: #4fd1c0;
     --playing-bg: #1a3a3a;
+    /* Mismos matices, más luminosos/saturados y algo más opacos para leerse sobre la waveform
+     * en modo oscuro. */
+    --region-1: rgba(240, 148, 68, 0.45);
+    --region-2: rgba(163, 189, 71, 0.45);
+    --region-3: rgba(69, 191, 140, 0.45);
+    --region-4: rgba(175, 132, 235, 0.45);
+    --region-5: rgba(224, 104, 163, 0.45);
+    --region-6: rgba(212, 168, 70, 0.45);
   }
 }
 
@@ -359,6 +378,28 @@ textarea {
  * captura conserva la prioridad visual, mientras el ▶ sigue mostrando que también suena. */
 .lines-output li.playing-line {
   background-color: var(--playing-bg);
+}
+
+/* El número dentro de la region y su recorte (overflow) se estilan en línea desde
+ * src/audio/player.ts, no acá: wavesurfer.js v8 renderiza las regions dentro de un shadow root
+ * propio, que esta hoja de estilos no puede atravesar con selectores de clase/atributo. */
+
+/* Chip de color junto al número de línea (Fase 10d-1): mismo color que su region, visible solo
+ * mientras esa línea tiene una region dibujada en la waveform (ui/regionChips.ts). Reservado en
+ * TODAS las líneas (igual que .playing-marker) para no correr el texto al aparecer/desaparecer;
+ * ni outline, ni border-left, ni fondo del <li> — un cuadradito propio para no pisar los otros
+ * estados. */
+.region-chip {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.4em;
+  border-radius: 2px;
+  visibility: hidden;
+}
+
+.region-chip.region-chip-visible {
+  visibility: visible;
 }
 
 .playing-marker {

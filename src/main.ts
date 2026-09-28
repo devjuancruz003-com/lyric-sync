@@ -44,6 +44,7 @@ import { setupFollowPlayback } from "./ui/followPlayback";
 import { setupPlayingLine } from "./ui/playingLine";
 import { setupTabs } from "./ui/tabs";
 import { setupSelectedLinePanel } from "./ui/selectedLinePanel";
+import { setupRegionChips } from "./ui/regionChips";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const els = renderLayout(app);
@@ -99,6 +100,8 @@ const wordSyncControls = setupWordSync({
   },
   statusElement: els.wordCaptureStatus,
 });
+
+setupRegionChips({ list: els.linesOutput, player, getProject: () => project });
 
 const selectedLinePanel = setupSelectedLinePanel({
   panel: els.selectedLinePanel,

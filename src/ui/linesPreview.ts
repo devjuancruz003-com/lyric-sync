@@ -65,6 +65,13 @@ export function renderLines(container: HTMLElement, lines: Line[], syncMode: Pro
     const li = document.createElement("li");
     li.dataset.lineId = line.id;
 
+    // Chip de color (ui/regionChips.ts): reservado en TODAS las líneas, igual que el marcador
+    // de abajo, para no correr el texto al aparecer/desaparecer con "Refinar timing".
+    const chip = document.createElement("span");
+    chip.className = "region-chip";
+    chip.setAttribute("aria-hidden", "true");
+    li.appendChild(chip);
+
     // Marcador de "línea que suena" (ui/playingLine.ts): reservado en TODAS las líneas (oculto
     // hasta que la <li> lleva .playing-line) para que resaltar una no corra el texto.
     const playingMarker = document.createElement("span");

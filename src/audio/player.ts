@@ -1,6 +1,7 @@
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin, { type Region } from "wavesurfer.js/plugins/regions";
 import type { Line } from "../core/project";
+import { getLineColorIndex, getLineColorVar } from "../core/lineColors";
 import type { LineEdge } from "../sync/timeline";
 
 export type Unsubscribe = () => void;
@@ -10,9 +11,33 @@ export const MAX_PX_PER_SEC = 1000;
 const ZOOM_STEP = 2;
 /** Debe coincidir con MIN_LINE_LENGTH_SEC en src/sync/timeline.ts. */
 const MIN_REGION_LENGTH_SEC = 0.05;
-// El color por defecto de las regions es casi imperceptible (negro al 10% de opacidad);
-// uno propio, bien visible, para que se puedan ver y agarrar con el mouse.
-const REGION_COLOR = "rgba(255, 159, 28, 0.3)";
+
+/**
+ * Contenido de una region: el número de línea (1-based, igual al que muestra la lista), con un
+ * fondo oscuro translúcido fijo (no la paleta) para leerse igual sobre cualquiera de los 6
+ * colores y en los dos temas — el color nunca es la única forma de identificar la línea. Estilos
+ * en línea (no una clase de style.css): wavesurfer.js v8 renderiza dentro de un shadow root
+ * propio, que una hoja de estilos externa no puede atravesar con selectores de clase/atributo
+ * (una custom property como `var(--accent)` sí cruza el shadow boundary, un `.region-number {}`
+ * no).
+ */
+function createRegionNumber(position: number): HTMLElement {
+  const span = document.createElement("span");
+  span.textContent = String(position + 1);
+  Object.assign(span.style, {
+    display: "inline-block",
+    margin: "2px",
+    padding: "1px 5px",
+    background: "rgba(0, 0, 0, 0.55)",
+    color: "#fff",
+    fontSize: "11px",
+    fontVariantNumeric: "tabular-nums",
+    lineHeight: "1.4",
+    borderRadius: "3px",
+    whiteSpace: "nowrap",
+  });
+  return span;
+}
 
 export interface RegionUpdate {
   lineId: string;
@@ -162,28 +187,57 @@ export class AudioPlayer {
     return this.regions.getRegions().find((region) => region.id === lineId);
   }
 
-  /** Reemplaza todas las regions por una por cada línea con startTime Y endTime definidos. */
+  /**
+   * Reemplaza todas las regions por una por cada línea con startTime Y endTime definidos. El
+   * color de cada una es `paleta[posición en `lines` % 6]` — la posición cuenta TODAS las
+   * líneas del proyecto, no solo las que tienen region, así el color de una línea no cambia
+   * entre llamadas mientras se capturan o refinan las demás (ver src/core/lineColors.ts).
+   */
   renderLineRegions(lines: Line[]): void {
     this.regions.clearRegions();
-    for (const line of lines) {
-      if (line.startTime === null || line.endTime === null) continue;
-      this.regions.addRegion({
+    lines.forEach((line, position) => {
+      if (line.startTime === null || line.endTime === null) return;
+      const region = this.regions.addRegion({
         id: line.id,
         start: line.startTime,
         end: line.endTime,
-        color: REGION_COLOR,
+        color: getLineColorVar(getLineColorIndex(position)),
+        content: createRegionNumber(position),
         drag: true,
         resize: true,
         resizeStart: true,
         resizeEnd: true,
         minLength: MIN_REGION_LENGTH_SEC,
       });
-    }
+      // Recorta el número si la region es angosta, sin desbordar (mismo motivo que el número en
+      // línea: una clase de style.css no llega acá, ver createRegionNumber más arriba).
+      if (region.element) region.element.style.overflow = "hidden";
+    });
   }
 
   /** Mueve la region de `lineId` a la posición dada (ej. para reflejar un nudge por teclado o un undo/redo). */
   updateRegion(lineId: string, start: number, end: number): void {
     this.findRegion(lineId)?.setOptions({ start, end });
+  }
+
+  /** Si `lineId` tiene una region dibujada en la waveform ahora mismo (solo las líneas ya
+   * pasadas por renderLineRegions() — captura en vivo sola no crea regions nuevas, updateRegion()
+   * solo mueve una existente). La usa el chip de color de la lista (ui/regionChips.ts). */
+  hasRegion(lineId: string): boolean {
+    return this.findRegion(lineId) !== undefined;
+  }
+
+  /**
+   * Se dispara cuando cambia el CONJUNTO de líneas con region (una region nueva o eliminada —
+   * no en cada drag/resize, eso es onRegionUpdateEnd). renderLineRegions() puede crear regions
+   * de forma diferida (si se llama antes de que el audio termine de cargar, el plugin espera a
+   * que la duración esté lista), así que esto puede dispararse más tarde que la propia llamada.
+   * Lo usa el chip de color de la lista para no depender de que la lista también se re-renderice
+   * en ese momento (ej. el cambio de duración al terminar de cargar audio no la re-renderiza).
+   */
+  onRegionsChanged(listener: () => void): Unsubscribe {
+    const offs = [this.regions.on("region-created", () => listener()), this.regions.on("region-removed", () => listener())];
+    return () => offs.forEach((off) => off());
   }
 
   /**
@@ -208,7 +262,9 @@ export class AudioPlayer {
     const region = this.findRegion(lineId);
     if (!region?.element) return;
 
-    region.element.style.outline = `2px solid ${accent}`;
+    // Más marcado que un resaltado normal (2px), para distinguirse sobre cualquier color de
+    // la paleta de líneas.
+    region.element.style.outline = `3px solid ${accent}`;
     const selector = activeEdge === "end" ? '[part~="region-handle-right"]' : '[part~="region-handle-left"]';
     const handle = region.element.querySelector<HTMLElement>(selector);
     if (!handle) return;
